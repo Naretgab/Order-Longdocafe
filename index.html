@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Long Do Cafe & Bakery — สั่งเครื่องดื่ม</title>
+<style>
+  :root{
+    --cream:#F6EFE3;
+    --paper:#FBF7EF;
+    --brown:#3D2A1E;
+    --brown-soft:#6B4E3D;
+    --gold:#B8863B;
+    --gold-soft:#E2C28C;
+    --line:#06C755;
+    --rule:#E3D6C0;
+    --shadow: 0 6px 18px rgba(61,42,30,0.10);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--cream);
+    color:var(--brown);
+    font-family:'Noto Sans Thai','Segoe UI',sans-serif;
+    padding-bottom:120px;
+  }
+  header{
+    padding:28px 20px 22px;
+    text-align:center;
+    background:linear-gradient(180deg,var(--paper),var(--cream));
+    border-bottom:1px solid var(--rule);
+  }
+  header .eyebrow{
+    letter-spacing:.18em;
+    font-size:11px;
+    color:var(--gold);
+    text-transform:uppercase;
+    margin-bottom:6px;
+  }
+  header h1{
+    margin:0;
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:.01em;
+  }
+  header p{
+    margin:6px 0 0;
+    font-size:13px;
+    color:var(--brown-soft);
+  }
+
+  .wrap{ max-width:560px; margin:0 auto; padding:18px 16px; }
+
+  .cat-tabs{
+    display:flex; gap:8px; overflow-x:auto; padding:4px 2px 14px;
+    -webkit-overflow-scrolling:touch;
+  }
+  .cat-tabs button{
+    flex:0 0 auto;
+    border:1px solid var(--rule);
+    background:var(--paper);
+    color:var(--brown-soft);
+    padding:8px 16px;
+    border-radius:999px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .cat-tabs button.active{
+    background:var(--brown);
+    border-color:var(--brown);
+    color:var(--cream);
+  }
+
+  .category-title{
+    font-size:15px;
+    font-weight:700;
+    color:var(--gold);
+    margin:18px 4px 8px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .category-title::after{
+    content:"";
+    flex:1;
+    height:1px;
+    background:var(--rule);
+  }
+
+  .item{
+    background:var(--paper);
+    border:1px solid var(--rule);
+    border-radius:14px;
+    padding:14px;
+    margin-bottom:10px;
+    box-shadow:var(--shadow);
+  }
+  .item-top{
+    display:flex; justify-content:space-between; align-items:flex-start; gap:10px;
+  }
+  .item-name{ font-weight:700; font-size:15px; }
+  .item-desc{ font-size:12px; color:var(--brown-soft); margin-top:2px; }
+  .item-price{ font-weight:700; color:var(--brown); white-space:nowrap; font-size:14px; }
+
+  .item-options{
+    margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;
+  }
+  .opt-btn{
+    border:1px solid var(--rule);
+    background:#fff;
+    color:var(--brown-soft);
+    font-size:12px;
+    padding:6px 10px;
+    border-radius:999px;
+    cursor:pointer;
+  }
+  .opt-btn.selected{
+    background:var(--gold-soft);
+    border-color:var(--gold);
+    color:var(--brown);
+    font-weight:700;
+  }
+
+  .item-bottom{
+    display:flex; justify-content:space-between; align-items:center; margin-top:12px;
+  }
+  .qty-control{
+    display:flex; align-items:center; gap:10px;
+    border:1px solid var(--rule);
+    border-radius:999px;
+    padding:4px 6px;
+    background:#fff;
+  }
+  .qty-control button{
+    width:26px; height:26px;
+    border-radius:50%;
+    border:none;
+    background:var(--cream);
+    color:var(--brown);
+    font-size:15px;
+    font-weight:700;
+    cursor:pointer;
+    line-height:1;
+  }
+  .qty-control span{ min-width:18px; text-align:center; font-weight:700; font-size:14px; }
+
+  .add-btn{
+    border:none;
+    background:var(--brown);
+    color:var(--cream);
+    font-size:12px;
+    font-weight:700;
+    padding:8px 14px;
+    border-radius:999px;
+    cursor:pointer;
+  }
+  .add-btn:disabled{
+    background:var(--rule);
+    color:var(--brown-soft);
+    cursor:default;
+  }
+
+  /* cart bar */
+  .cart-bar{
+    position:fixed; left:0; right:0; bottom:0;
+    background:var(--brown);
+    color:var(--cream);
+    padding:14px 18px;
+    display:flex; justify-content:space-between; align-items:center;
+    box-shadow:0 -4px 16px rgba(0,0,0,.15);
+    cursor:pointer;
+    z-index:30;
+  }
+  .cart-bar.hidden{ display:none; }
+  .cart-bar .cb-left{ display:flex; flex-direction:column; }
+  .cart-bar .cb-count{ font-size:12px; color:var(--gold-soft); }
+  .cart-bar .cb-total{ font-size:18px; font-weight:700; }
+  .cart-bar .cb-cta{
+    background:var(--gold);
+    color:var(--brown);
+    font-weight:700;
+    font-size:13px;
+    padding:10px 18px;
+    border-radius:999px;
+  }
+
+  /* drawer */
+  .overlay{
+    position:fixed; inset:0; background:rgba(61,42,30,.45);
+    display:none; z-index:40;
+  }
+  .overlay.show{ display:block; }
+  .drawer{
+    position:fixed; left:0; right:0; bottom:0;
+    max-height:85vh;
+    background:var(--paper);
+    border-radius:20px 20px 0 0;
+    z-index:50;
+    transform:translateY(110%);
+    transition:transform .25s ease;
+    display:flex; flex-direction:column;
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  .drawer.show{ transform:translateY(0); }
+  .drawer-handle{
+    width:40px; height:4px; background:var(--rule); border-radius:99px;
+    margin:10px auto 4px;
+  }
+  .drawer-head{
+    padding:6px 20px 12px;
+    display:flex; justify-content:space-between; align-items:center;
+    border-bottom:1px solid var(--rule);
+  }
+  .drawer-head h2{ margin:0; font-size:17px; }
+  .drawer-head button{
+    border:none; background:none; font-size:20px; color:var(--brown-soft); cursor:pointer;
+  }
+  .drawer-body{ padding:10px 20px; overflow-y:auto; flex:1; }
+  .cart-line{
+    display:flex; justify-content:space-between; gap:10px;
+    padding:10px 0; border-bottom:1px dashed var(--rule);
+  }
+  .cart-line .cl-name{ font-weight:700; font-size:14px; }
+  .cart-line .cl-opt{ font-size:12px; color:var(--brown-soft); margin-top:2px;}
+  .cart-line .cl-right{ text-align:right; white-space:nowrap; }
+  .cart-line .cl-remove{
+    border:none; background:none; color:#B85C4A; font-size:12px; cursor:pointer; margin-top:4px;
+  }
+  .empty-note{ text-align:center; color:var(--brown-soft); font-size:13px; padding:30px 0; }
+
+  .drawer-foot{
+    padding:14px 20px 18px;
+    border-top:1px solid var(--rule);
+    background:var(--paper);
+  }
+  .field{ margin-bottom:10px; }
+  .field label{ font-size:12px; font-weight:700; color:var(--brown-soft); display:block; margin-bottom:4px; }
+  .field input, .field select{
+    width:100%;
+    border:1px solid var(--rule);
+    border-radius:10px;
+    padding:9px 10px;
+    font-size:14px;
+    font-family:inherit;
+    background:#fff;
+    color:var(--brown);
+  }
+  .row2{ display:flex; gap:10px; }
+  .row2 .field{ flex:1; }
+
+  .total-line{
+    display:flex; justify-content:space-between; align-items:center;
+    font-weight:700; font-size:16px; margin:8px 0 12px;
+  }
+
+  .line-send-btn{
+    width:100%;
+    background:var(--line);
+    color:#fff;
+    border:none;
+    border-radius:12px;
+    padding:14px;
+    font-size:15px;
+    font-weight:700;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    cursor:pointer;
+  }
+  .line-send-btn:disabled{ background:var(--rule); color:var(--brown-soft); }
+  .send-hint{ font-size:11px; color:var(--brown-soft); text-align:center; margin-top:8px; }
+
+  .toast{
+    position:fixed; left:50%; top:18px; transform:translate(-50%,-30px);
+    background:var(--brown); color:var(--cream); padding:10px 18px;
+    border-radius:999px; font-size:13px; z-index:60; opacity:0;
+    transition:all .25s ease; pointer-events:none;
+  }
+  .toast.show{ opacity:1; transform:translate(-50%,0); }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="images/logo.png" alt="Long Do Cafe & Bakery" style="width:110px; height:auto; margin-bottom:6px;">
+  <div class="eyebrow">Long Do Cafe & Bakery</div>
+  <h1>สั่งเครื่องดื่ม / เบเกอรี่</h1>
+  <p>เลือกเมนู แล้วส่งออเดอร์เข้า LINE ร้านได้ทันที</p>
+  <p style="margin-top:10px; font-size:12px; color:var(--brown-soft); line-height:1.6;">
+    6 ซอยรามอินทรา 8 แยก 12 แขวงอนุสาวรีย์ เขตบางเขน กรุงเทพมหานคร 10220<br>
+    โทร 082-899-7230
+  </p>
+</header>
+
+<div class="wrap">
+  <div class="cat-tabs" id="catTabs"></div>
+  <div id="menuArea"></div>
+</div>
+
+<div class="cart-bar hidden" id="cartBar">
+  <div class="cb-left">
+    <span class="cb-count" id="cbCount">0 รายการ</span>
+    <span class="cb-total" id="cbTotal">฿0</span>
+  </div>
+  <div class="cb-cta">ดูตะกร้า →</div>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-head">
+    <h2>ตะกร้าของคุณ</h2>
+    <button id="closeDrawer">✕</button>
+  </div>
+  <div class="drawer-body" id="cartBody"></div>
+  <div class="drawer-foot">
+    <div class="field">
+      <label>ชื่อลูกค้า</label>
+      <input type="text" id="custName" placeholder="ชื่อสำหรับเรียกรับออเดอร์">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>รับที่ร้าน / เดลิเวอรี่</label>
+        <select id="orderType">
+          <option value="รับที่ร้าน">รับที่ร้าน</option>
+          <option value="เดลิเวอรี่">เดลิเวอรี่</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>เวลาที่ต้องการรับ</label>
+        <input type="text" id="pickupTime" placeholder="เช่น 15 นาที">
+      </div>
+    </div>
+    <div class="field">
+      <label>หมายเหตุเพิ่มเติม</label>
+      <input type="text" id="orderNote" placeholder="เช่น ไม่ใส่น้ำแข็ง, แพ้ถั่ว">
+    </div>
+    <div class="field">
+      <label>ที่อยู่จัดส่ง (เลขที่ / หมู่บ้าน)</label>
+      <input type="text" id="custAddress" placeholder="เช่น 99/1 หมู่บ้านสายลม ซอย 5">
+    </div>
+    <div class="total-line">
+      <span>ยอดรวม</span>
+      <span id="drawerTotal">฿0</span>
+    </div>
+    <button class="line-send-btn" id="sendLineBtn">
+      ส่งออเดอร์เข้า LINE ร้าน
+    </button>
+    <div class="send-hint">กดแล้วจะเปิดแชท LINE ของร้านพร้อมข้อความออเดอร์ — กด "ส่ง" อีกครั้งในแอป LINE เพื่อยืนยัน</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================== CONFIG ===================== */
+const LINE_OA_ID = "@longdocafe"; // เปลี่ยนเป็น LINE ID จริงของร้านได้ตรงนี้
+
+/* ===================== เมนู Long Do Cafe & Bakery (จากไฟล์ Menu_Table.xlsx) ===================== */
+/* โครงสร้าง: หมวดหลัก -> หมวดย่อย -> รายการ */
+function item(id,name,price,options){
+  return { id, name, desc:"", price, options: options || {} };
+}
+const HOT_COLD_OPT = { "อุณหภูมิ":["ร้อน","เย็น"] };
+
+const MENU = {
+  "Coffee": {
+    "Basic Coffee": [
+      item("c01","อเมริกาโน่ (Americano)",45,HOT_COLD_OPT),
+      item("c02","ลาเต้ (Latte)",55,HOT_COLD_OPT),
+      item("c03","เอสเพรสโซ่เย็น (Espresso Yen)",55),
+      item("c04","มอคค่า (Mocha)",60,HOT_COLD_OPT),
+      item("c05","คาปูชิโน่ (Cappucino)",55,HOT_COLD_OPT),
+      item("c06","คาราเมลมัคคิอาโต้ (Caramel Macchiato)",60,HOT_COLD_OPT),
+      item("c07","เฮเซลนัท มัคคิอาโต้ (Hazelnut Macchiato)",60,HOT_COLD_OPT),
+    ],
+    "Flavor Fusion Coffee": [
+      item("c08","อเมริกาโน่น้ำผึ้ง (Americano Honey)",60),
+      item("c09","อเมริกาโน่น้ำส้ม (Americano Orange)",60),
+      item("c10","อเมริกาโน่มะพร้าวน้ำหอม (Americano Coconut)",60),
+      item("c11","อเมริกาโน่ยูซุ (Americano Yuzu)",60),
+      item("c12","แอโรกาโน่ (Aerocano)",60),
+    ],
+    "Signature Coffee": [
+      item("c13","บิสคอฟลาเต้ (Biscoff Latte)",95),
+      item("c14","ท๊อฟฟี่ ลาเต้ คอฟฟี่ (Toffee Latte Coffee)",80),
+      item("c15","ดัลโกน่า (Dalgona)",65),
+      item("c16","ลาเต้โฟมมะพร้าว (Latte Cold Foam Coconut)",70),
+    ],
+  },
+  "Tea": {
+    "Cylon Tea": [
+      item("t01","ชาไทย (Thaitea)",40,HOT_COLD_OPT),
+      item("t02","ชาไทยครีมชีส (Thai Tea Cream Cheeze)",60),
+      item("t03","ชาเขียว (Green Tea)",45,HOT_COLD_OPT),
+      item("t04","ชาเขียวครีมชีส (Greentea Cream Cheese)",65),
+      item("t05","ชาน้ำผึ้งเลม่อน (Honey Lemon Tea)",60),
+      item("t06","ชาดำ (Black Tea)",40,HOT_COLD_OPT),
+      item("t07","ชาเลม่อน (Lemon Tea)",50),
+    ],
+    "Matcha": [
+      item("t08","มัทฉะลาเต้ (Matcha Latte)",75,HOT_COLD_OPT),
+      item("t09","มัทฉะลาเต้ตาลโตนด (Matcha latte Palm sugar)",90),
+      item("t10","มัทฉะลาเต้ถั่วคินาโกะ (Matcha Latte with Kinako)",80),
+      item("t11","มัทฉะลาเต้มะพร้าวน้ำหอม (Coconut Matcha Latte)",85),
+      item("t12","มัทฉะลาเต้สตรอว์เบอร์รี่ (Matcha Latte Strawberry)",90),
+      item("t13","มัทฉะลาเต้โอริโอ้ (Matcha Latte Orio)",80),
+      item("t14","เพียวมัทฉะ (Matcha)",65,HOT_COLD_OPT),
+      item("t15","เพียวมัทฉะมะพร้าวน้ำหอม (Matcha Coconut)",85),
+    ],
+    "Fruit Tea": [
+      item("t16","ชามะลิพีช วุ้นกบ (Peach Jasmine Tea with Aiyu Jelly)",85),
+      item("t17","ชามะลิลิ้นจี่ วุ้นกบ (Lychee Jasmine Tea with Aiyu Jelly)",85),
+      item("t18","ชาอัสสัมพีช (Peach Assam Tea)",80),
+      item("t19","ชาอัสสัมส้ม (Orange Assam Tea)",80),
+    ],
+  },
+  "Non Caffeine": {
+    "Milk": [
+      item("n01","นมชมพู (Pink Milk)",40),
+      item("n02","นมชมพูช็อคโก้ (Pink Milk Choco)",55),
+      item("n03","บิสคอฟนมสด (Milk Biscoff)",60),
+    ],
+    "Cocoa": [
+      item("n04","โกโก้ ช็อคโก้ (Cocoa Chocolate)",55),
+    ],
+    "Italian Soda": [
+      item("n05","แดงเลม่อนโซดา (Red Lemon Soda)",45),
+      item("n06","แดงโซดา (Red Soda)",40),
+      item("n07","ส้มยูสุโซดา (Yuzu Soda)",50),
+      item("n08","สตรอเบอร์รี่โซดา (Strawberry Soda)",50),
+      item("n09","พีชโซดา (Peach Soda)",45),
+      item("n10","ลิ้นจี่โซดา (Lychee Soda)",45),
+    ],
+  },
+  "Bakery": {
+    "Bakery": [
+      item("b01","ชิโอปัง (Shio Pan)",55),
+      item("b02","ชิโอปังไส้กรอกชีส (Shiopan Cheddar Cheese Sausage)",95),
+      item("b03","ครัวซองต์ (Croissant)",65),
+    ],
+  },
+};
+
+/* เพิ่มตัวเลือกความหวาน + น้ำแข็ง ให้ทุกเมนูเครื่องดื่ม (ไม่รวม Bakery) */
+const SWEET_OPT = ["หวานมาก 125%","หวานปกติ 100%","หวานน้อย 50%","หวานน้อยมาก 25%","ไม่เติมไซรัป 0%"];
+const ICE_OPT = ["แยกน้ำแข็ง (รสชาติดี)","ไม่แยกน้ำแข็ง (พร้อมดื่ม)","ไม่รับน้ำแข็ง"];
+Object.keys(MENU).forEach(cat=>{
+  if(cat === "Bakery") return;
+  Object.keys(MENU[cat]).forEach(sub=>{
+    MENU[cat][sub].forEach(it=>{
+      it.options["ความหวาน"] = SWEET_OPT;
+      it.options["น้ำแข็ง"] = ICE_OPT;
+    });
+  });
+});
+
+/* ===================== STATE ===================== */
+let cart = []; // {key, name, price, qty, opts:{group:value}}
+let activeCat = Object.keys(MENU)[0];
+let selections = {}; // { itemId: {group:value} }
+
+const fmt = n => "฿" + n.toLocaleString("th-TH");
+
+/* ===================== RENDER MENU ===================== */
+function renderTabs(){
+  const tabs = document.getElementById("catTabs");
+  tabs.innerHTML = "";
+  Object.keys(MENU).forEach(cat=>{
+    const btn = document.createElement("button");
+    btn.textContent = cat;
+    if(cat === activeCat) btn.classList.add("active");
+    btn.onclick = ()=>{ activeCat = cat; renderTabs(); renderMenu(); };
+    tabs.appendChild(btn);
+  });
+}
+
+function parseOptionPrice(label){
+  const m = label.match(/\(\+(\d+)\)/);
+  return m ? parseInt(m[1]) : 0;
+}
+function cleanLabel(label){
+  return label.replace(/\s*\(\+\d+\)/,"");
+}
+
+function findItemById(id){
+  for(const cat of Object.keys(MENU)){
+    for(const sub of Object.keys(MENU[cat])){
+      const found = MENU[cat][sub].find(i=>i.id===id);
+      if(found) return found;
+    }
+  }
+  return null;
+}
+
+function renderMenu(){
+  const area = document.getElementById("menuArea");
+  area.innerHTML = "";
+
+  const subcats = MENU[activeCat];
+  Object.keys(subcats).forEach(subName=>{
+    const showSubHeading = Object.keys(subcats).length > 1 || subName !== activeCat;
+    if(showSubHeading){
+      const title = document.createElement("div");
+      title.className = "category-title";
+      title.textContent = subName;
+      area.appendChild(title);
+    }
+
+    subcats[subName].forEach(item=>{
+      if(!selections[item.id]){
+        selections[item.id] = {};
+        Object.keys(item.options).forEach(g=>{
+          selections[item.id][g] = item.options[g][0];
+        });
+      }
+      const card = document.createElement("div");
+      card.className = "item";
+
+      const optGroupsHtml = Object.keys(item.options).map(group=>{
+        const opts = item.options[group].map(opt=>{
+          const sel = selections[item.id][group] === opt ? "selected" : "";
+          return `<button type="button" class="opt-btn ${sel}" data-item="${item.id}" data-group="${group}" data-opt="${opt}">${cleanLabel(opt)}</button>`;
+        }).join("");
+        return `<div class="item-options">${opts}</div>`;
+      }).join("");
+
+      card.innerHTML = `
+        <div class="item-top">
+          <div>
+            <div class="item-name">${item.name}</div>
+            ${item.desc ? `<div class="item-desc">${item.desc}</div>` : ""}
+          </div>
+          <div class="item-price">${fmt(item.price)}</div>
+        </div>
+        ${optGroupsHtml}
+        <div class="item-bottom">
+          <div class="qty-control">
+            <button type="button" data-act="minus" data-item="${item.id}">−</button>
+            <span id="qty-${item.id}">1</span>
+            <button type="button" data-act="plus" data-item="${item.id}">+</button>
+          </div>
+          <button class="add-btn" data-add="${item.id}">เพิ่มลงตะกร้า</button>
+        </div>
+      `;
+      area.appendChild(card);
+    });
+  });
+
+  // option selection
+  area.querySelectorAll(".opt-btn").forEach(btn=>{
+    btn.onclick = ()=>{
+      const {item:itemId, group, opt} = btn.dataset;
+      selections[itemId][group] = opt;
+      renderMenu();
+    };
+  });
+
+  // qty controls (local, per render — using temp data attr)
+  area.querySelectorAll('[data-act]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.item;
+      const span = document.getElementById("qty-"+id);
+      let q = parseInt(span.textContent);
+      if(btn.dataset.act === "plus") q++;
+      if(btn.dataset.act === "minus") q = Math.max(1,q-1);
+      span.textContent = q;
+    };
+  });
+
+  // add to cart
+  area.querySelectorAll('[data-add]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.add;
+      const item = findItemById(id);
+      const qty = parseInt(document.getElementById("qty-"+id).textContent);
+      const opts = {...selections[id]};
+      let optPriceAdd = 0;
+      Object.values(opts).forEach(v=> optPriceAdd += parseOptionPrice(v));
+      const cleanOpts = {};
+      Object.keys(opts).forEach(g=> cleanOpts[g] = cleanLabel(opts[g]));
+
+      cart.push({
+        key: id + "-" + JSON.stringify(cleanOpts) + "-" + Date.now(),
+        name: item.name,
+        unitPrice: item.price + optPriceAdd,
+        qty,
+        opts: cleanOpts
+      });
+      document.getElementById("qty-"+id).textContent = 1;
+      updateCartBar();
+      showToast(`เพิ่ม "${item.name}" x${qty} แล้ว`);
+    };
+  });
+}
+
+/* ===================== CART ===================== */
+function cartTotal(){
+  return cart.reduce((sum,line)=> sum + line.unitPrice*line.qty, 0);
+}
+function cartCount(){
+  return cart.reduce((sum,line)=> sum + line.qty, 0);
+}
+
+function updateCartBar(){
+  const bar = document.getElementById("cartBar");
+  const count = cartCount();
+  if(count === 0){
+    bar.classList.add("hidden");
+  } else {
+    bar.classList.remove("hidden");
+    document.getElementById("cbCount").textContent = count + " รายการ";
+    document.getElementById("cbTotal").textContent = fmt(cartTotal());
+  }
+  renderCartDrawer();
+}
+
+function renderCartDrawer(){
+  const body = document.getElementById("cartBody");
+  body.innerHTML = "";
+  if(cart.length === 0){
+    body.innerHTML = `<div class="empty-note">ยังไม่มีรายการในตะกร้า</div>`;
+  } else {
+    cart.forEach((line,idx)=>{
+      const optText = Object.entries(line.opts).map(([g,v])=>v).join(", ");
+      const row = document.createElement("div");
+      row.className = "cart-line";
+      row.innerHTML = `
+        <div>
+          <div class="cl-name">${line.name} x${line.qty}</div>
+          ${optText ? `<div class="cl-opt">${optText}</div>` : ""}
+        </div>
+        <div class="cl-right">
+          <div>${fmt(line.unitPrice*line.qty)}</div>
+          <button class="cl-remove" data-idx="${idx}">ลบ</button>
+        </div>
+      `;
+      body.appendChild(row);
+    });
+    body.querySelectorAll(".cl-remove").forEach(btn=>{
+      btn.onclick = ()=>{
+        cart.splice(parseInt(btn.dataset.idx),1);
+        updateCartBar();
+      };
+    });
+  }
+  document.getElementById("drawerTotal").textContent = fmt(cartTotal());
+}
+
+/* ===================== DRAWER OPEN/CLOSE ===================== */
+const overlay = document.getElementById("overlay");
+const drawer = document.getElementById("drawer");
+
+function openDrawer(){
+  renderCartDrawer();
+  overlay.classList.add("show");
+  drawer.classList.add("show");
+}
+function closeDrawer(){
+  overlay.classList.remove("show");
+  drawer.classList.remove("show");
+}
+document.getElementById("cartBar").onclick = openDrawer;
+document.getElementById("closeDrawer").onclick = closeDrawer;
+overlay.onclick = closeDrawer;
+
+/* ===================== TOAST ===================== */
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(showToast._tm);
+  showToast._tm = setTimeout(()=> t.classList.remove("show"), 1600);
+}
+
+/* ===================== SEND TO LINE ===================== */
+function buildOrderText(){
+  const name = document.getElementById("custName").value.trim() || "ลูกค้า";
+  const type = document.getElementById("orderType").value;
+  const time = document.getElementById("pickupTime").value.trim();
+  const note = document.getElementById("orderNote").value.trim();
+  const address = document.getElementById("custAddress").value.trim();
+
+  let lines = [];
+  lines.push(`📋 ออเดอร์ใหม่ — Long Do Cafe & Bakery`);
+  lines.push(`ลูกค้า: ${name}`);
+  lines.push(`ประเภท: ${type}${time ? " (รับใน " + time + ")" : ""}`);
+  if(address) lines.push(`ที่อยู่จัดส่ง: ${address}`);
+  lines.push(``);
+  cart.forEach(line=>{
+    const optText = Object.entries(line.opts).map(([g,v])=>v).join(", ");
+    lines.push(`• ${line.name} x${line.qty}${optText ? " (" + optText + ")" : ""} — ${fmt(line.unitPrice*line.qty)}`);
+  });
+  lines.push(``);
+  lines.push(`ยอดรวม: ${fmt(cartTotal())}`);
+  if(note) lines.push(`หมายเหตุ: ${note}`);
+  return lines.join("\n");
+}
+
+document.getElementById("sendLineBtn").onclick = ()=>{
+  if(cart.length === 0){
+    showToast("กรุณาเลือกเมนูก่อนส่งออเดอร์");
+    return;
+  }
+  const text = buildOrderText();
+  const url = `https://line.me/R/oaMessage/${encodeURIComponent(LINE_OA_ID)}/?${encodeURIComponent(text)}`;
+  window.open(url, "_blank");
+};
+
+/* ===================== INIT ===================== */
+renderTabs();
+renderMenu();
+updateCartBar();
+</script>
+</body>
+</html>
