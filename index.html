@@ -1298,15 +1298,23 @@ document.getElementById("modalAddBtn").onclick = ()=>{
   const cleanOpts = {};
   Object.keys(opts).forEach(g=> cleanOpts[g] = cleanLabel(opts[g]));
 
-  cart.push({
-    key: id + "-" + JSON.stringify(cleanOpts) + "-" + Date.now(),
-    id: id,
-    name: item.name,
-    unitPrice: item.price + optPriceAdd,
-    qty,
-    opts: cleanOpts,
-    note: itemNote
-  });
+  // เมนูเดิม + ตัวเลือกเดิม + โน้ตเดิมเป๊ะ ให้รวมจำนวนเข้าบรรทัดเดียวกัน ไม่ต้องแยกรายการ
+  const signature = id + "|" + JSON.stringify(cleanOpts) + "|" + itemNote;
+  const existingLine = cart.find(line=> line.key === signature);
+
+  if(existingLine){
+    existingLine.qty += qty;
+  } else {
+    cart.push({
+      key: signature,
+      id: id,
+      name: item.name,
+      unitPrice: item.price + optPriceAdd,
+      qty,
+      opts: cleanOpts,
+      note: itemNote
+    });
+  }
   updateCartBar();
   showToast(`เพิ่ม "${item.name}" x${qty} แล้ว`);
   closeItemModal();
