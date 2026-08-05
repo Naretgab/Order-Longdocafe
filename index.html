@@ -368,7 +368,7 @@
   }
   .item-modal-head h2{ margin:0 0 2px; font-size:18px; }
   .item-modal-head .im-desc{ font-size:13px; color:var(--brown-soft); margin-bottom:4px; }
-  .item-modal-head .im-price{ font-weight:700; color:var(--brown-soft); font-size:14px; }
+  .item-modal-head .im-price{ font-weight:700; color:var(--brown-soft); font-size:14px; margin-top:2px; }
   .item-modal-body{ padding:14px 20px; overflow-y:auto; flex:1; }
   .modal-group{ margin-bottom:16px; }
   .modal-group-label{ font-size:13px; font-weight:700; color:var(--brown-soft); margin-bottom:8px; }
@@ -376,13 +376,27 @@
     padding:14px 20px 18px;
     border-top:1px solid var(--rule);
     background:var(--paper);
-    display:flex; align-items:center; gap:12px;
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .qty-control.qty-control-wide{
+    width:100%;
+    justify-content:space-between;
+    padding:6px 14px;
+    box-sizing:border-box;
+  }
+  .qty-control.qty-control-wide button{
+    width:34px; height:34px;
+    font-size:18px;
+  }
+  .qty-control.qty-control-wide span{
+    font-size:16px;
   }
   .item-modal-foot .add-btn{
-    flex:1;
+    width:100%;
     padding:13px;
     font-size:14px;
     border-radius:12px;
+    box-sizing:border-box;
   }
 
   /* --- สินค้าหมด / จัดการสินค้า (Admin) --- */
@@ -652,7 +666,7 @@
     <input type="text" id="modalNote" placeholder="เช่น คุณเอ คุณบี แยกกาแฟกับนม หรือคำสั่งเพิ่มเติม">
   </div>
   <div class="item-modal-foot">
-    <div class="qty-control">
+    <div class="qty-control qty-control-wide">
       <button type="button" id="modalQtyMinus">−</button>
       <span id="modalQty">1</span>
       <button type="button" id="modalQtyPlus">+</button>
@@ -1040,19 +1054,27 @@ function saveCustomerInfoToCookies(){
 const LAST_ORDER_COOKIE = "longdocafe_lastOrderItems";
 const LAST_ORDER_CAT = "Last Order";
 
-// บันทึกไอดีเมนูที่สั่งล่าสุด (ไม่ซ้ำ เรียงตามลำดับที่สั่ง) ไว้ในคุกกี้ — เรียกตอนกดส่งออเดอร์
+// บันทึกไอดีเมนู + ตัวเลือกที่เลือกไว้ล่าสุดของแต่ละเมนู (ไม่ซ้ำ เรียงตามลำดับที่สั่ง) ไว้ในคุกกี้ — เรียกตอนกดส่งออเดอร์
 function saveLastOrderToCookies(){
-  const ids = [];
-  cart.forEach(line=>{ if(!ids.includes(line.id)) ids.push(line.id); });
-  if(ids.length) setCookie(LAST_ORDER_COOKIE, JSON.stringify(ids), 180);
+  const map = new Map(); // id -> opts (ถ้าสั่งเมนูเดิมหลายแบบในออเดอร์เดียว จะจำแบบที่สั่งล่าสุดในออเดอร์นั้น)
+  cart.forEach(line=>{ map.set(line.id, line.opts); });
+  const entries = [...map.entries()].map(([id,opts])=>({ id, opts }));
+  if(entries.length) setCookie(LAST_ORDER_COOKIE, JSON.stringify(entries), 180);
 }
 
 // ดึงรายการเมนูที่สั่งล่าสุดกลับมา (อิงข้อมูลเมนูปัจจุบันเสมอ เผื่อราคา/รูป/ตัวเลือกมีการอัปเดต) ตัดรายการที่ถูกลบออกจากเมนูไปแล้วทิ้ง
+// แต่ละรายการที่คืนมาจะมี _lastOrderOpts แปะไว้ด้วย (ตัวเลือกที่เคยเลือกไว้ล่าสุด) ให้ตอนกดเปิดเมนูใช้ pre-select ให้อัตโนมัติ
 function getLastOrderItems(){
   try {
-    const ids = JSON.parse(getCookie(LAST_ORDER_COOKIE) || "[]");
-    if(!Array.isArray(ids)) return [];
-    return ids.map(id=> findItemById(id)).filter(it=> !!it);
+    const entries = JSON.parse(getCookie(LAST_ORDER_COOKIE) || "[]");
+    if(!Array.isArray(entries)) return [];
+    return entries
+      .map(entry=>{
+        const it = findItemById(entry && entry.id);
+        if(!it) return null;
+        return { ...it, _lastOrderOpts: (entry && entry.opts) || {} }; // สำเนา ไม่แก้ item จริงใน MENU
+      })
+      .filter(it=> !!it);
   } catch(e){
     return [];
   }
@@ -1209,7 +1231,19 @@ function renderMenu(){
       `;
       card.onclick = soldOutNow
         ? ()=> showToast(soldOutBadgeText(soldOutEntry))
-        : ()=> openItemModal(item.id);
+        : ()=> {
+            if(item._lastOrderOpts){
+              const restored = {};
+              Object.keys(item.options).forEach(g=>{
+                const rememberedVal = item._lastOrderOpts[g];
+                // เทียบแบบ clean label เพราะค่าที่เก็บไว้ในตะกร้า/คุกกี้เป็นข้อความที่ตัดราคาออกแล้ว
+                const match = rememberedVal && item.options[g].find(raw => cleanLabel(raw) === rememberedVal);
+                restored[g] = match || defaultForGroup(g, item.options[g], item.id);
+              });
+              selections[item.id] = restored;
+            }
+            openItemModal(item.id);
+          };
       grid.appendChild(card);
     });
 
