@@ -555,6 +555,31 @@
   .mi-delete-btn{
     border:none; background:none; color:#b0392f; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;
   }
+
+  /* --- แก้ไขกลุ่มตัวเลือกที่สร้างเอง --- */
+  .option-group-row{
+    border:1px solid var(--rule); border-radius:12px;
+    padding:12px; margin-bottom:12px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .og-name-row{ display:flex; gap:8px; align-items:center; }
+  .og-name-row input.og-label{ flex:1; font-size:13px; font-weight:700; }
+  .og-delete-group-btn{
+    border:none; background:none; color:#b0392f; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;
+  }
+  .og-choices-label{ font-size:11px; color:var(--brown-soft); font-weight:700; }
+  .og-choice-row{ display:flex; gap:8px; align-items:center; }
+  .og-choice-row input.og-choice-text{ flex:1; font-size:12px; }
+  .og-delete-choice-btn{
+    width:22px; height:22px; flex:0 0 auto; padding:0;
+    border:1px solid var(--rule); background:#fff; border-radius:6px;
+    font-size:12px; color:var(--brown-soft); cursor:pointer;
+  }
+  .og-add-choice-btn{
+    align-self:flex-start;
+    border:1px dashed var(--gold); background:none; color:var(--gold);
+    font-size:12px; font-weight:700; padding:5px 10px; border-radius:8px; cursor:pointer;
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -686,6 +711,7 @@
   <div class="admin-tabs">
     <button class="admin-tab-btn active" id="adminTabSoldout">สินค้าหมด</button>
     <button class="admin-tab-btn" id="adminTabMenu">จัดการเมนู</button>
+    <button class="admin-tab-btn" id="adminTabOptions">ตัวเลือกเสริม</button>
   </div>
 
   <div class="admin-panel" id="adminPanelSoldout">
@@ -705,6 +731,15 @@
     <div class="admin-modal-foot">
       <button class="admin-secondary-btn" id="addMenuItemBtn">+ เพิ่มเมนูใหม่</button>
       <button class="add-btn" id="saveMenuAdminBtn">บันทึกเมนู</button>
+    </div>
+  </div>
+
+  <div class="admin-panel hidden" id="adminPanelOptions">
+    <p class="admin-hint">สร้างกลุ่มตัวเลือกใหม่ของตัวเอง (เช่น ขนาดแก้ว, ทอปปิ้ง) ตั้งชื่อและกำหนดตัวเลือกในกลุ่มเอง ใส่ราคาเพิ่มได้ด้วยรูปแบบ "ชื่อ +10.-" — สร้างเสร็จไปผูกกับเมนูได้ที่แท็บ "จัดการเมนู" (ต้องตั้งค่า Supabase ไว้แล้วเท่านั้น)</p>
+    <div class="admin-modal-body" id="optionGroupsAdminBody"></div>
+    <div class="admin-modal-foot">
+      <button class="admin-secondary-btn" id="addOptionGroupBtn">+ เพิ่มกลุ่มตัวเลือกใหม่</button>
+      <button class="add-btn" id="saveOptionGroupsBtn">บันทึกตัวเลือกเสริม</button>
     </div>
   </div>
 </div>
@@ -873,6 +908,39 @@ const OPTION_GROUP_DEFS = {
   milk:        { label: "ชนิดนม",     groupName: "ชนิดนม",    values: MILK_OPT },
   coffee_bean: { label: "เมล็ดกาแฟ",  groupName: "เมล็ดกาแฟ", values: COFFEE_BEAN_OPT },
 };
+// กลุ่มตัวเลือกที่ร้านสร้างขึ้นเอง (ผ่านหน้าแอดมิน) นอกเหนือจาก 5 กลุ่มมาตรฐานด้านบน — โหลดจาก Supabase ตาราง option_groups
+// รูปแบบ: { [key]: { label:"ขนาดแก้ว", choices:["เล็ก","กลาง (+10)","ใหญ่ (+20)"] } }
+let CUSTOM_OPTION_GROUPS = {};
+
+// รวมกลุ่มมาตรฐาน + กลุ่มที่ร้านสร้างเอง คืนรูปแบบเดียวกัน { label, groupName, values } หรือ null ถ้าไม่พบ
+function getOptionGroupDef(key){
+  if(OPTION_GROUP_DEFS[key]) return OPTION_GROUP_DEFS[key];
+  const custom = CUSTOM_OPTION_GROUPS[key];
+  if(custom) return { label: custom.label, groupName: custom.label, values: custom.choices };
+  return null;
+}
+// รายชื่อ key ทั้งหมดที่เลือกใช้ได้ตอนนี้ (มาตรฐาน + ที่ร้านสร้างเอง)
+function getAllOptionGroupKeys(){
+  return [...Object.keys(OPTION_GROUP_DEFS), ...Object.keys(CUSTOM_OPTION_GROUPS)];
+}
+
+async function loadCustomOptionGroups(){
+  if(!supabaseClient) return false;
+  try {
+    const { data, error } = await supabaseClient.from("option_groups").select("*");
+    if(error) throw error;
+    const map = {};
+    (data || []).forEach(row=>{
+      map[row.key] = { label: row.label, choices: Array.isArray(row.choices) ? row.choices : [] };
+    });
+    CUSTOM_OPTION_GROUPS = map;
+    return true;
+  } catch(e){
+    console.error("โหลดกลุ่มตัวเลือกที่สร้างเองจาก Supabase ไม่สำเร็จ:", e.message);
+    return false;
+  }
+}
+
 const BEAN_ROAST_COLORS = [
   { match: "Dark Roast", color: "#3B2317" },      // น้ำตาลเข้ม
   { match: "Medium-Dark Roast", color: "#A9744F" }, // น้ำตาลอ่อน
@@ -898,7 +966,7 @@ function applyItemOptionGroups(it){
   const keys = Array.isArray(it.optionGroupKeys) ? it.optionGroupKeys : [];
   const newOptions = {};
   keys.forEach(key=>{
-    const def = OPTION_GROUP_DEFS[key];
+    const def = getOptionGroupDef(key);
     if(def) newOptions[def.groupName] = def.values;
   });
   it.options = newOptions;
@@ -1483,8 +1551,8 @@ function buildOrderText(){
   lines.push(``);
   cart.forEach((line,idx)=>{
     const optEntries = Object.entries(line.opts).filter(([g,v])=> !(g === "ชนิดนม" && v === "นมสด"));
-    const optText = optEntries.map(([g,v])=>v).join(", ");
-    lines.push(`${idx+1}. ${line.name}${optText ? " (" + optText + ")" : ""} X${line.qty}`);
+    lines.push(`${idx+1}. ${line.name} x${line.qty}`);
+    optEntries.forEach(([g,v])=> lines.push(`- ${v}`));
     if(line.note) lines.push(`   📝 ${line.note}`);
     lines.push(``);
   });
@@ -1666,7 +1734,7 @@ function renderMenuAdminPanel(){
       ).join("");
 
     const chipsHtml = row.optionGroupKeys.map((key,keyIdx)=>{
-      const def = OPTION_GROUP_DEFS[key];
+      const def = getOptionGroupDef(key);
       if(!def) return "";
       return `
         <span class="mi-optgroup-chip" data-key="${key}">
@@ -1677,9 +1745,9 @@ function renderMenuAdminPanel(){
         </span>
       `;
     }).join("");
-    const addOptionsHtml = Object.keys(OPTION_GROUP_DEFS)
+    const addOptionsHtml = getAllOptionGroupKeys()
       .filter(key=> !row.optionGroupKeys.includes(key))
-      .map(key=> `<option value="${key}">${OPTION_GROUP_DEFS[key].label}</option>`)
+      .map(key=> `<option value="${key}">${getOptionGroupDef(key).label}</option>`)
       .join("");
 
     const groupIndices = groupIndicesOf(row);
@@ -1926,6 +1994,154 @@ document.getElementById("saveMenuAdminBtn").onclick = async ()=>{
   }
 };
 
+/* ---------- ตัวเลือกเสริม (กลุ่มตัวเลือกที่ร้านสร้างเอง) ---------- */
+let optionGroupEditRows = []; // สำเนาแก้ไขได้: [{key, label, choices:[...], isNew}]
+let originalOptionGroupKeysForEdit = []; // key ที่มีอยู่ในฐานข้อมูลตอนเปิดหน้า ใช้เทียบตอนบันทึกว่าอันไหนถูกลบไป
+
+function flattenCustomOptionGroupsToEditRows(){
+  return Object.keys(CUSTOM_OPTION_GROUPS).map(key=>({
+    key,
+    label: CUSTOM_OPTION_GROUPS[key].label,
+    choices: [...CUSTOM_OPTION_GROUPS[key].choices],
+    isNew: false,
+  }));
+}
+
+function readOptionGroupsPanelIntoRows(){
+  document.querySelectorAll("#optionGroupsAdminBody .option-group-row").forEach(rowEl=>{
+    const idx = parseInt(rowEl.dataset.idx);
+    const row = optionGroupEditRows[idx];
+    if(!row) return;
+    row.label = rowEl.querySelector(".og-label").value.trim();
+    // เก็บค่าดิบไว้ก่อน (ไม่ trim/กรองอันว่างตรงนี้) ไม่งั้น index ของแถวจะเพี้ยนตอนกดลบตัวเลือกอื่น
+    row.choices = [...rowEl.querySelectorAll(".og-choice-text")].map(inp=>inp.value);
+  });
+}
+
+function renderOptionGroupsAdminPanel(){
+  if(optionGroupEditRows.length === 0){
+    optionGroupEditRows = flattenCustomOptionGroupsToEditRows();
+    originalOptionGroupKeysForEdit = optionGroupEditRows.map(r=>r.key);
+  }
+  const body = document.getElementById("optionGroupsAdminBody");
+  body.innerHTML = "";
+
+  if(!supabaseClient){
+    body.innerHTML = `<p class="admin-hint" style="padding:0;">ยังไม่ได้ตั้งค่า Supabase — ต้องตั้งค่าก่อนถึงจะสร้าง/แก้ไขกลุ่มตัวเลือกผ่านหน้านี้ได้</p>`;
+    return;
+  }
+  if(optionGroupEditRows.length === 0){
+    body.innerHTML = `<p class="admin-hint" style="padding:0;">ยังไม่มีกลุ่มตัวเลือกที่สร้างเอง กด "+ เพิ่มกลุ่มตัวเลือกใหม่" ด้านล่างเพื่อเริ่มสร้างได้เลย</p>`;
+  }
+
+  optionGroupEditRows.forEach((row,idx)=>{
+    const rowEl = document.createElement("div");
+    rowEl.className = "option-group-row";
+    rowEl.dataset.idx = idx;
+
+    const choiceRowsHtml = row.choices.map(choice=>`
+      <div class="og-choice-row">
+        <input type="text" class="og-choice-text" value="${choice.replace(/"/g,"&quot;")}" placeholder="เช่น กลาง +10.-">
+        <button type="button" class="og-delete-choice-btn">✕</button>
+      </div>
+    `).join("");
+
+    rowEl.innerHTML = `
+      <div class="og-name-row">
+        <input type="text" class="og-label" value="${row.label.replace(/"/g,"&quot;")}" placeholder="ชื่อกลุ่มตัวเลือก เช่น ขนาดแก้ว">
+        <button type="button" class="og-delete-group-btn">ลบกลุ่มนี้</button>
+      </div>
+      <div class="og-choices-label">ตัวเลือกในกลุ่ม (ใส่ราคาเพิ่มได้แบบ "ชื่อ +10.-"):</div>
+      <div class="og-choice-list">${choiceRowsHtml}</div>
+      <button type="button" class="og-add-choice-btn">+ เพิ่มตัวเลือกในกลุ่มนี้</button>
+    `;
+
+    rowEl.querySelectorAll(".og-delete-choice-btn").forEach(btn=>{
+      btn.onclick = ()=>{
+        readOptionGroupsPanelIntoRows();
+        const choiceIdx = [...btn.closest(".og-choice-list").children].indexOf(btn.closest(".og-choice-row"));
+        row.choices.splice(choiceIdx,1);
+        renderOptionGroupsAdminPanel();
+      };
+    });
+    rowEl.querySelector(".og-add-choice-btn").onclick = ()=>{
+      readOptionGroupsPanelIntoRows();
+      row.choices.push("");
+      renderOptionGroupsAdminPanel();
+    };
+    rowEl.querySelector(".og-delete-group-btn").onclick = ()=>{
+      readOptionGroupsPanelIntoRows();
+      optionGroupEditRows.splice(idx,1);
+      renderOptionGroupsAdminPanel();
+    };
+
+    body.appendChild(rowEl);
+  });
+}
+
+document.getElementById("addOptionGroupBtn").onclick = ()=>{
+  if(!supabaseClient){
+    showToast("ต้องตั้งค่า Supabase ก่อนถึงจะสร้างกลุ่มตัวเลือกใหม่ได้");
+    return;
+  }
+  readOptionGroupsPanelIntoRows();
+  optionGroupEditRows.push({
+    key: "opt_" + Date.now().toString(36),
+    label: "",
+    choices: [""],
+    isNew: true,
+  });
+  renderOptionGroupsAdminPanel();
+  document.getElementById("optionGroupsAdminBody").scrollTop = document.getElementById("optionGroupsAdminBody").scrollHeight;
+};
+
+document.getElementById("saveOptionGroupsBtn").onclick = async ()=>{
+  if(!supabaseClient){
+    showToast("ต้องตั้งค่า Supabase ก่อนถึงจะบันทึกตัวเลือกเสริมผ่านหน้านี้ได้");
+    return;
+  }
+  readOptionGroupsPanelIntoRows();
+
+  const invalid = optionGroupEditRows.find(r=> !r.label || r.choices.map(c=>c.trim()).filter(c=>c).length === 0);
+  if(invalid){
+    showToast("กรุณาใส่ชื่อกลุ่มและตัวเลือกอย่างน้อย 1 อันให้ครบทุกกลุ่ม");
+    return;
+  }
+
+  const saveBtn = document.getElementById("saveOptionGroupsBtn");
+  saveBtn.disabled = true;
+  saveBtn.textContent = "กำลังบันทึก...";
+  try {
+    const upserts = optionGroupEditRows.map(r=>({
+      key: r.key,
+      label: r.label,
+      choices: r.choices.map(c=>c.trim()).filter(c=>c),
+    }));
+    const currentKeys = optionGroupEditRows.map(r=>r.key);
+    const toDelete = originalOptionGroupKeysForEdit.filter(key=> !currentKeys.includes(key));
+
+    const { error: upsertError } = await supabaseClient.from("option_groups").upsert(upserts);
+    if(upsertError) throw upsertError;
+    if(toDelete.length){
+      const { error: deleteError } = await supabaseClient.from("option_groups").delete().in("key", toDelete);
+      if(deleteError) throw deleteError;
+    }
+
+    await loadCustomOptionGroups();
+    applyMenuCustomizations();
+    optionGroupEditRows = []; // บังคับให้ดึงข้อมูลใหม่ครั้งถัดไปที่เปิดแผงนี้
+    renderMenu();
+    closeAdminModal();
+    showToast("บันทึกตัวเลือกเสริมแล้ว");
+  } catch(e){
+    console.error(e);
+    showToast("บันทึกตัวเลือกเสริมไม่สำเร็จ: " + e.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "บันทึกตัวเลือกเสริม";
+  }
+};
+
 const MENU_ADMIN_PIN = "8173";
 const MENU_ADMIN_PIN_SESSION_KEY = "longdocafe_menu_pin_ok";
 
@@ -1943,21 +2159,25 @@ function checkAdminPin(){
 }
 
 function switchAdminTab(tab){
-  const isMenu = tab === "menu";
-  document.getElementById("adminTabSoldout").classList.toggle("active", !isMenu);
-  document.getElementById("adminTabMenu").classList.toggle("active", isMenu);
-  document.getElementById("adminPanelSoldout").classList.toggle("hidden", isMenu);
-  document.getElementById("adminPanelMenu").classList.toggle("hidden", !isMenu);
-  if(isMenu) renderMenuAdminPanel();
+  document.getElementById("adminTabSoldout").classList.toggle("active", tab === "soldout");
+  document.getElementById("adminTabMenu").classList.toggle("active", tab === "menu");
+  document.getElementById("adminTabOptions").classList.toggle("active", tab === "options");
+  document.getElementById("adminPanelSoldout").classList.toggle("hidden", tab !== "soldout");
+  document.getElementById("adminPanelMenu").classList.toggle("hidden", tab !== "menu");
+  document.getElementById("adminPanelOptions").classList.toggle("hidden", tab !== "options");
+  if(tab === "menu") renderMenuAdminPanel();
+  if(tab === "options") renderOptionGroupsAdminPanel();
 }
 document.getElementById("adminTabSoldout").onclick = ()=> switchAdminTab("soldout");
 document.getElementById("adminTabMenu").onclick = ()=> switchAdminTab("menu");
+document.getElementById("adminTabOptions").onclick = ()=> switchAdminTab("options");
 
 function openAdminModal(){
   if(!checkAdminPin()) return; // ใส่รหัสผิด/ยกเลิก ไม่เปิดหน้าจัดการร้านเลย
   renderAdminPanel();
   menuEditRows = []; // เปิดใหม่ทุกครั้ง ดึงเมนูล่าสุดมาแก้เสมอ
   menuAdminActiveCategory = null; // จะเลือกหมวดแรกให้อัตโนมัติตอน render
+  optionGroupEditRows = []; // เปิดใหม่ทุกครั้ง ดึงกลุ่มตัวเลือกล่าสุดมาแก้เสมอ
   switchAdminTab("soldout");
   adminOverlay.classList.add("show");
   adminModal.classList.add("show");
@@ -2003,6 +2223,7 @@ async function boot(){
   prefillCustomerInfoFromCookies();
 
   await loadMenuFromSupabase(); // ถ้าไม่ได้ตั้งค่า/โหลดไม่สำเร็จ/ตารางว่าง จะยังคงใช้ FALLBACK_MENU ที่ MENU ชี้ไว้อยู่แล้ว
+  await loadCustomOptionGroups(); // กลุ่มตัวเลือกที่ร้านสร้างเอง (นอกเหนือจาก 5 กลุ่มมาตรฐาน)
   applyMenuCustomizations();
   activeCat = defaultLandingCategory(); // หน้าแรกที่เข้ามาเป็นหมวด Coffee เสมอ
 
@@ -2025,6 +2246,16 @@ async function boot(){
           renderTabs();
           renderMenu();
         }
+      })
+      .subscribe();
+
+    // อัปเดตแบบเรียลไทม์เมื่อมีการแก้ไขกลุ่มตัวเลือกที่สร้างเอง (เพิ่ม/ลบ/แก้ตัวเลือกในกลุ่ม)
+    supabaseClient
+      .channel("option_groups_changes")
+      .on("postgres_changes", { event:"*", schema:"public", table:"option_groups" }, async ()=>{
+        await loadCustomOptionGroups();
+        applyMenuCustomizations();
+        renderMenu();
       })
       .subscribe();
   }
