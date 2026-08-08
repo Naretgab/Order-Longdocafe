@@ -1280,8 +1280,11 @@ function renderMenu(){
     subcats[subName].forEach(item=>{
       if(!selections[item.id]){
         selections[item.id] = {};
+        const requiredGroupNames = item.requiredGroupNames || new Set();
         Object.keys(item.options).forEach(g=>{
-          selections[item.id][g] = defaultForGroup(g, item.options[g], item.id);
+          selections[item.id][g] = requiredGroupNames.has(g)
+            ? defaultForGroup(g, item.options[g], item.id)
+            : null; // ตัวเลือกไม่บังคับ ค่าเริ่มต้นคือ "ยังไม่เลือก"
         });
       }
       const card = document.createElement("div");
@@ -1320,11 +1323,12 @@ function renderMenu(){
         : ()=> {
             if(item._lastOrderOpts){
               const restored = {};
+              const requiredGroupNames = item.requiredGroupNames || new Set();
               Object.keys(item.options).forEach(g=>{
                 const rememberedVal = item._lastOrderOpts[g];
                 // เทียบแบบ clean label เพราะค่าที่เก็บไว้ในตะกร้า/คุกกี้เป็นข้อความที่ตัดราคาออกแล้ว
                 const match = rememberedVal && item.options[g].find(raw => cleanLabel(raw) === rememberedVal);
-                restored[g] = match || defaultForGroup(g, item.options[g], item.id);
+                restored[g] = match || (requiredGroupNames.has(g) ? defaultForGroup(g, item.options[g], item.id) : null);
               });
               selections[item.id] = restored;
             }
