@@ -372,6 +372,8 @@
   .item-modal-body{ padding:14px 20px; overflow-y:auto; flex:1; }
   .modal-group{ margin-bottom:16px; }
   .modal-group-label{ font-size:13px; font-weight:700; color:var(--brown-soft); margin-bottom:8px; }
+  .req-mark{ font-size:11px; font-weight:700; color:#b0392f; }
+  .opt-mark{ font-size:11px; font-weight:500; color:var(--brown-soft); opacity:.7; }
   .item-modal-foot{
     padding:14px 20px 18px;
     border-top:1px solid var(--rule);
@@ -550,6 +552,11 @@
     cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;
   }
   .mi-optgroup-chip button:disabled{ opacity:.3; cursor:default; }
+  .mi-og-required{
+    display:flex; align-items:center; gap:3px;
+    font-size:10px; font-weight:600; color:var(--brown);
+    background:rgba(255,255,255,.5); padding:2px 6px; border-radius:999px; white-space:nowrap;
+  }
   .mi-optgroup-add-row{ display:flex; gap:8px; align-items:center; justify-content:space-between; }
   .mi-optgroup-add{ flex:1; max-width:200px; }
   .mi-delete-btn{
@@ -962,18 +969,29 @@ function highlightBeanTags(label){
 // (ชื่อ/ราคา/รูป/หมวดหมู่ ย้ายไป Supabase แล้ว แต่ตัวเลือกพิเศษเฉพาะเมนูพวกนี้ยังคงกำหนดผ่านโค้ดตรงนี้)
 // สร้างตัวเลือก (options) ของเมนูจาก optionGroupKeys ที่กำหนดไว้ (เรียงตามลำดับที่กำหนด)
 // ใช้ได้ทั้งเมนูที่มาจาก Supabase (ผ่านหน้าแอดมิน) และเมนูสำรอง FALLBACK_MENU ในโค้ด
+// รองรับทั้งรูปแบบเก่า (แค่ key เป็น string ล้วน = ถือว่าบังคับเลือกเสมอ) และรูปแบบใหม่ {key, required}
+function normalizeOptionGroupEntry(entry){
+  if(typeof entry === "string") return { key: entry, required: true };
+  return { key: entry.key, required: entry.required !== false };
+}
+
 function applyItemOptionGroups(it){
-  const keys = Array.isArray(it.optionGroupKeys) ? it.optionGroupKeys : [];
+  const rawEntries = Array.isArray(it.optionGroupKeys) ? it.optionGroupKeys : [];
+  const entries = rawEntries.map(normalizeOptionGroupEntry);
   const newOptions = {};
-  keys.forEach(key=>{
+  const requiredGroupNames = new Set(); // ชื่อกลุ่ม (groupName ที่โชว์ลูกค้า) ที่ "บังคับ" ต้องเลือกก่อนเพิ่มลงตะกร้า
+  entries.forEach(({key,required})=>{
     const def = getOptionGroupDef(key);
-    if(def) newOptions[def.groupName] = def.values;
+    if(!def) return;
+    newOptions[def.groupName] = def.values;
+    if(required) requiredGroupNames.add(def.groupName);
   });
   it.options = newOptions;
+  it.requiredGroupNames = requiredGroupNames;
 }
 
 // ตั้งค่าเริ่มต้น optionGroupKeys ให้เมนูใน FALLBACK_MENU (เมนูที่มาจาก Supabase จะมี optionGroupKeys ติดมาจาก DB อยู่แล้ว ไม่ผ่านฟังก์ชันนี้)
-// ทำครั้งเดียวตอนโหลดสคริปต์ เพื่อให้พฤติกรรมเดิมก่อนย้ายไป Supabase ยังคงเหมือนเดิมทุกประการ
+// ทำครั้งเดียวตอนโหลดสคริปต์ เพื่อให้พฤติกรรมเดิมก่อนย้ายไป Supabase ยังคงเหมือนเดิมทุกประการ (ทุกกลุ่มถือเป็น "บังคับ" เหมือนพฤติกรรมเดิม)
 (function seedFallbackMenuOptionGroups(){
   Object.keys(FALLBACK_MENU).forEach(cat=>{
     Object.keys(FALLBACK_MENU[cat]).forEach(sub=>{
@@ -988,7 +1006,7 @@ function applyItemOptionGroups(it){
         }
         keys.push("ice");
         if(it.id !== "c14") keys.push("sweetness"); // ท๊อฟฟี่ ลาเต้ คอฟฟี่: ปรับหวานเองด้วยฮันนี่คอมป์ ไม่มีตัวเลือกความหวาน
-        it.optionGroupKeys = keys;
+        it.optionGroupKeys = keys.map(key=>({ key, required: true }));
       });
     });
   });
@@ -1334,10 +1352,12 @@ function openItemModal(id){
 
   const body = document.getElementById("modalBody");
   const groups = Object.keys(item.options);
+  const requiredGroupNames = item.requiredGroupNames || new Set();
   if(groups.length === 0){
     body.innerHTML = `<div class="empty-note">เมนูนี้ไม่มีตัวเลือกเพิ่มเติม</div>`;
   } else {
     body.innerHTML = groups.map(group=>{
+      const isRequired = requiredGroupNames.has(group);
       const opts = item.options[group].map(opt=>{
         const sel = selections[id][group] === opt ? "selected" : "";
         const price = parseOptionPrice(opt);
@@ -1349,9 +1369,12 @@ function openItemModal(id){
           : "";
         return `<button type="button" class="opt-btn ${sel}" data-group="${group}" data-opt="${opt}">${dotHtml}${group === "เมล็ดกาแฟ" ? highlightBeanTags(cleanLabel(opt)) : cleanLabel(opt)}${priceHtml}</button>`;
       }).join("");
+      const reqMarkHtml = isRequired
+        ? `<span class="req-mark">* จำเป็นต้องเลือก</span>`
+        : `<span class="opt-mark">(ไม่บังคับ — กดซ้ำเพื่อยกเลิก)</span>`;
       return `
         <div class="modal-group">
-          <div class="modal-group-label">${group}</div>
+          <div class="modal-group-label">${group} ${reqMarkHtml}</div>
           <div class="item-options" style="margin-top:0;">${opts}</div>
         </div>
       `;
@@ -1360,7 +1383,13 @@ function openItemModal(id){
     body.querySelectorAll(".opt-btn").forEach(btn=>{
       btn.onclick = ()=>{
         const { group, opt } = btn.dataset;
-        selections[id][group] = opt;
+        const isRequired = requiredGroupNames.has(group);
+        const alreadySelected = selections[id][group] === opt;
+        if(alreadySelected && !isRequired){
+          selections[id][group] = null; // ตัวเลือกไม่บังคับ กดซ้ำเพื่อยกเลิกได้
+        } else {
+          selections[id][group] = opt;
+        }
         openItemModal(id); // re-render modal with new selection highlighted
       };
     });
@@ -1392,9 +1421,20 @@ document.getElementById("modalAddBtn").onclick = ()=>{
   const id = currentModalItemId;
   if(!id) return;
   const item = findItemById(id);
+  const requiredGroupNames = item.requiredGroupNames || new Set();
+
+  // เช็คว่าเลือกครบทุกตัวเลือกที่ "บังคับ" แล้วหรือยัง ก่อนเพิ่มลงตะกร้า
+  const missingGroup = [...requiredGroupNames].find(g=> !selections[id][g]);
+  if(missingGroup){
+    showToast(`กรุณาเลือก "${missingGroup}" ก่อนเพิ่มลงตะกร้า`);
+    return;
+  }
+
   const qty = parseInt(document.getElementById("modalQty").textContent);
   const itemNote = document.getElementById("modalNote").value.trim();
-  const opts = {...selections[id]};
+  // เอาเฉพาะกลุ่มที่มีการเลือกจริง (ตัวเลือกไม่บังคับที่ถูกยกเลิกไว้จะไม่ติดไปในตะกร้า)
+  const opts = {};
+  Object.keys(selections[id]).forEach(g=>{ if(selections[id][g]) opts[g] = selections[id][g]; });
   let optPriceAdd = 0;
   Object.values(opts).forEach(v=> optPriceAdd += parseOptionPrice(v));
   const cleanOpts = {};
@@ -1624,7 +1664,7 @@ function flattenMenuToEditRows(){
           name: it.name,
           price: it.price,
           image: it.img ? it.img.replace(/^images\//,"") : "",
-          optionGroupKeys: Array.isArray(it.optionGroupKeys) ? [...it.optionGroupKeys] : [],
+          optionGroupKeys: (Array.isArray(it.optionGroupKeys) ? it.optionGroupKeys : []).map(normalizeOptionGroupEntry),
           desc: it.desc || "",
           badge: it.badge || "",
           categoryOrder: catIdx,
@@ -1733,12 +1773,13 @@ function renderMenuAdminPanel(){
         `<option value="${s.replace(/"/g,"&quot;")}" ${s===row.subcategory?"selected":""}>${s}</option>`
       ).join("");
 
-    const chipsHtml = row.optionGroupKeys.map((key,keyIdx)=>{
-      const def = getOptionGroupDef(key);
+    const chipsHtml = row.optionGroupKeys.map((entry,keyIdx)=>{
+      const def = getOptionGroupDef(entry.key);
       if(!def) return "";
       return `
-        <span class="mi-optgroup-chip" data-key="${key}">
+        <span class="mi-optgroup-chip" data-key="${entry.key}">
           ${def.label}
+          <label class="mi-og-required"><input type="checkbox" class="mi-og-required-cb" ${entry.required ? "checked" : ""}> บังคับ</label>
           <button type="button" class="mi-og-up" ${keyIdx===0 ? "disabled" : ""}>↑</button>
           <button type="button" class="mi-og-down" ${keyIdx===row.optionGroupKeys.length-1 ? "disabled" : ""}>↓</button>
           <button type="button" class="mi-og-remove">✕</button>
@@ -1746,7 +1787,7 @@ function renderMenuAdminPanel(){
       `;
     }).join("");
     const addOptionsHtml = getAllOptionGroupKeys()
-      .filter(key=> !row.optionGroupKeys.includes(key))
+      .filter(key=> !row.optionGroupKeys.some(e=>e.key===key))
       .map(key=> `<option value="${key}">${getOptionGroupDef(key).label}</option>`)
       .join("");
 
@@ -1843,7 +1884,7 @@ function renderMenuAdminPanel(){
       btn.onclick = ()=>{
         const key = btn.closest(".mi-optgroup-chip").dataset.key;
         readMenuAdminPanelIntoRows();
-        const i = row.optionGroupKeys.indexOf(key);
+        const i = row.optionGroupKeys.findIndex(e=>e.key===key);
         if(i > 0){
           [row.optionGroupKeys[i-1], row.optionGroupKeys[i]] = [row.optionGroupKeys[i], row.optionGroupKeys[i-1]];
         }
@@ -1854,7 +1895,7 @@ function renderMenuAdminPanel(){
       btn.onclick = ()=>{
         const key = btn.closest(".mi-optgroup-chip").dataset.key;
         readMenuAdminPanelIntoRows();
-        const i = row.optionGroupKeys.indexOf(key);
+        const i = row.optionGroupKeys.findIndex(e=>e.key===key);
         if(i >= 0 && i < row.optionGroupKeys.length-1){
           [row.optionGroupKeys[i+1], row.optionGroupKeys[i]] = [row.optionGroupKeys[i], row.optionGroupKeys[i+1]];
         }
@@ -1865,15 +1906,24 @@ function renderMenuAdminPanel(){
       btn.onclick = ()=>{
         const key = btn.closest(".mi-optgroup-chip").dataset.key;
         readMenuAdminPanelIntoRows();
-        row.optionGroupKeys = row.optionGroupKeys.filter(k=>k!==key);
+        row.optionGroupKeys = row.optionGroupKeys.filter(e=>e.key!==key);
         renderMenuAdminPanel();
+      };
+    });
+    rowEl.querySelectorAll(".mi-og-required-cb").forEach(cb=>{
+      cb.onchange = ()=>{
+        const key = cb.closest(".mi-optgroup-chip").dataset.key;
+        readMenuAdminPanelIntoRows();
+        const entry = row.optionGroupKeys.find(e=>e.key===key);
+        if(entry) entry.required = cb.checked;
+        // ไม่ต้อง re-render ทั้งแผง แค่ค่านี้เปลี่ยนพอ (กัน checkbox เด้งเสียโฟกัส)
       };
     });
     rowEl.querySelector(".mi-optgroup-add").onchange = (e)=>{
       const key = e.target.value;
       if(!key) return;
       readMenuAdminPanelIntoRows();
-      row.optionGroupKeys.push(key);
+      row.optionGroupKeys.push({ key, required: true });
       renderMenuAdminPanel();
     };
 
