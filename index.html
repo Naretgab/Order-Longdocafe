@@ -742,7 +742,7 @@
   </div>
 
   <div class="admin-panel hidden" id="adminPanelOptions">
-    <p class="admin-hint">สร้างกลุ่มตัวเลือกใหม่ของตัวเอง (เช่น ขนาดแก้ว, ทอปปิ้ง) ตั้งชื่อและกำหนดตัวเลือกในกลุ่มเอง ใส่ราคาเพิ่มได้ด้วยรูปแบบ "ชื่อ +10.-" — สร้างเสร็จไปผูกกับเมนูได้ที่แท็บ "จัดการเมนู" (ต้องตั้งค่า Supabase ไว้แล้วเท่านั้น)</p>
+    <p class="admin-hint">แก้ไข/เพิ่ม/ลบตัวเลือกในกลุ่มมาตรฐาน (ร้อน-เย็น, ความหวาน, น้ำแข็ง, ชนิดนม, เมล็ดกาแฟ) หรือสร้างกลุ่มใหม่ของตัวเองก็ได้ (เช่น ขนาดแก้ว, ทอปปิ้ง) ใส่ราคาเพิ่มได้ด้วยรูปแบบ "ชื่อ +10.-" — ไปผูกกับเมนูได้ที่แท็บ "จัดการเมนู" (ต้องตั้งค่า Supabase ไว้แล้วเท่านั้น)</p>
     <div class="admin-modal-body" id="optionGroupsAdminBody"></div>
     <div class="admin-modal-foot">
       <button class="admin-secondary-btn" id="addOptionGroupBtn">+ เพิ่มกลุ่มตัวเลือกใหม่</button>
@@ -907,43 +907,44 @@ const COFFEE_BEAN_OPT = [
   "Light Roast: Mae Salong, Chiang Rai – Washed Process (+15.-)",
   "Light-Medium Roast: Mae Suai, Chiang Rai – Natural Process (+20.-)"
 ];
-// กลุ่มตัวเลือกมาตรฐานที่เลือกได้ต่อเมนูผ่านหน้าแอดมิน (เนื้อหาตัวเลือกแต่ละกลุ่มยังคงกำหนดในโค้ดตรงนี้ที่เดียว)
-const OPTION_GROUP_DEFS = {
-  hot_cold:    { label: "ร้อน/เย็น",  groupName: "อุณหภูมิ",  values: HOT_COLD_OPT["อุณหภูมิ"] },
-  sweetness:   { label: "ความหวาน",   groupName: "ความหวาน",  values: SWEET_OPT },
-  ice:         { label: "น้ำแข็ง",    groupName: "น้ำแข็ง",   values: ICE_OPT },
-  milk:        { label: "ชนิดนม",     groupName: "ชนิดนม",    values: MILK_OPT },
-  coffee_bean: { label: "เมล็ดกาแฟ",  groupName: "เมล็ดกาแฟ", values: COFFEE_BEAN_OPT },
+// เนื้อหาของ 5 กลุ่มตัวเลือกมาตรฐานเดิม — ใช้เป็น "ค่าสำรอง" เท่านั้น ตอนที่ยังไม่ได้ตั้งค่า Supabase หรือโหลดไม่สำเร็จ
+// ปกติแล้วตอนนี้ทั้ง 5 กลุ่มนี้ (และกลุ่มที่ร้านสร้างเอง) จะโหลดมาจากตาราง option_groups ใน Supabase ทั้งหมด แก้ไข/เพิ่ม/ลบได้ผ่านหน้าแอดมิน
+const FALLBACK_OPTION_GROUPS = {
+  hot_cold:    { label: "อุณหภูมิ",  choices: HOT_COLD_OPT["อุณหภูมิ"] },
+  sweetness:   { label: "ความหวาน",   choices: SWEET_OPT },
+  ice:         { label: "น้ำแข็ง",    choices: ICE_OPT },
+  milk:        { label: "ชนิดนม",     choices: MILK_OPT },
+  coffee_bean: { label: "เมล็ดกาแฟ",  choices: COFFEE_BEAN_OPT },
 };
-// กลุ่มตัวเลือกที่ร้านสร้างขึ้นเอง (ผ่านหน้าแอดมิน) นอกเหนือจาก 5 กลุ่มมาตรฐานด้านบน — โหลดจาก Supabase ตาราง option_groups
+// กลุ่มตัวเลือกทั้งหมดที่ใช้งานจริงตอนนี้ (โหลดจาก Supabase ตาราง option_groups — รวมทั้ง 5 กลุ่มมาตรฐานและกลุ่มที่ร้านสร้างเอง)
 // รูปแบบ: { [key]: { label:"ขนาดแก้ว", choices:["เล็ก","กลาง (+10)","ใหญ่ (+20)"] } }
-let CUSTOM_OPTION_GROUPS = {};
+let CUSTOM_OPTION_GROUPS = FALLBACK_OPTION_GROUPS;
 
-// รวมกลุ่มมาตรฐาน + กลุ่มที่ร้านสร้างเอง คืนรูปแบบเดียวกัน { label, groupName, values } หรือ null ถ้าไม่พบ
 function getOptionGroupDef(key){
-  if(OPTION_GROUP_DEFS[key]) return OPTION_GROUP_DEFS[key];
-  const custom = CUSTOM_OPTION_GROUPS[key];
-  if(custom) return { label: custom.label, groupName: custom.label, values: custom.choices };
-  return null;
+  const g = CUSTOM_OPTION_GROUPS[key];
+  if(!g) return null;
+  return { label: g.label, groupName: g.label, values: g.choices };
 }
-// รายชื่อ key ทั้งหมดที่เลือกใช้ได้ตอนนี้ (มาตรฐาน + ที่ร้านสร้างเอง)
+// รายชื่อ key ทั้งหมดที่เลือกใช้ได้ตอนนี้
 function getAllOptionGroupKeys(){
-  return [...Object.keys(OPTION_GROUP_DEFS), ...Object.keys(CUSTOM_OPTION_GROUPS)];
+  return Object.keys(CUSTOM_OPTION_GROUPS);
 }
 
+// โหลดกลุ่มตัวเลือกทั้งหมด (มาตรฐาน + ที่ร้านสร้างเอง) จากตาราง option_groups — คืนค่า true ถ้าโหลดสำเร็จและมีข้อมูล, false ถ้าไม่ได้ตั้งค่า/โหลดไม่สำเร็จ/ตารางว่าง (ใช้ FALLBACK_OPTION_GROUPS ต่อไป)
 async function loadCustomOptionGroups(){
   if(!supabaseClient) return false;
   try {
     const { data, error } = await supabaseClient.from("option_groups").select("*");
     if(error) throw error;
+    if(!data || data.length === 0) return false;
     const map = {};
-    (data || []).forEach(row=>{
+    data.forEach(row=>{
       map[row.key] = { label: row.label, choices: Array.isArray(row.choices) ? row.choices : [] };
     });
     CUSTOM_OPTION_GROUPS = map;
     return true;
   } catch(e){
-    console.error("โหลดกลุ่มตัวเลือกที่สร้างเองจาก Supabase ไม่สำเร็จ:", e.message);
+    console.error("โหลดกลุ่มตัวเลือกจาก Supabase ไม่สำเร็จ ใช้ตัวเลือกสำรองในโค้ดแทน:", e.message);
     return false;
   }
 }
@@ -2277,7 +2278,7 @@ async function boot(){
   prefillCustomerInfoFromCookies();
 
   await loadMenuFromSupabase(); // ถ้าไม่ได้ตั้งค่า/โหลดไม่สำเร็จ/ตารางว่าง จะยังคงใช้ FALLBACK_MENU ที่ MENU ชี้ไว้อยู่แล้ว
-  await loadCustomOptionGroups(); // กลุ่มตัวเลือกที่ร้านสร้างเอง (นอกเหนือจาก 5 กลุ่มมาตรฐาน)
+  await loadCustomOptionGroups(); // กลุ่มตัวเลือกทั้งหมด (5 กลุ่มมาตรฐาน + ที่ร้านสร้างเอง) โหลดจาก Supabase
   applyMenuCustomizations();
   activeCat = defaultLandingCategory(); // หน้าแรกที่เข้ามาเป็นหมวด Coffee เสมอ
 
