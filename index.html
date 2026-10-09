@@ -599,6 +599,29 @@
     border:1px dashed var(--gold); background:none; color:var(--gold);
     font-size:12px; font-weight:700; padding:5px 10px; border-radius:8px; cursor:pointer;
   }
+
+  /* Keep touch controls responsive, while retaining intentional pinch zoom. */
+  html { -webkit-text-size-adjust:100%; }
+  button, .item, .cart-bar { touch-action:manipulation; }
+  input, select, textarea { font-size:16px !important; }
+  .drawer-body, .item-modal-body, .admin-modal-body { overscroll-behavior:contain; }
+  .cart-bar { padding-bottom:calc(14px + env(safe-area-inset-bottom,0px)); }
+  .viewport-controls .cart-bar,
+  .viewport-controls .drawer.show,
+  .viewport-controls .item-modal.show,
+  .viewport-controls .admin-modal.show {
+    left:var(--visible-left); right:auto; bottom:auto;
+    top:var(--visible-bottom); width:var(--control-width);
+    transform-origin:top left;
+    transform:scale(var(--control-scale)) translateY(-100%);
+    transition:none;
+  }
+  .viewport-controls .drawer.show,
+  .viewport-controls .item-modal.show,
+  .viewport-controls .admin-modal.show { max-height:var(--control-height); }
+  @media (prefers-reduced-motion:reduce) {
+    *, *::before, *::after { transition:none !important; }
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -1306,7 +1329,7 @@ function renderMenu(){
 
       const hasOptions = Object.keys(item.options).length > 0;
       const photoHtml = item.img
-        ? `<img src="${item.img}" alt="${item.name}" loading="lazy">`
+        ? `<img src="${item.img}" alt="${item.name}" loading="lazy" decoding="async">`
         : `<span class="no-photo">☕</span>`;
 
       const soldOutEntry = getSoldOutMap()[item.id];
@@ -1384,7 +1407,7 @@ function openItemModal(id){
         const priceHtml = group === "เมล็ดกาแฟ" && price > 0
           ? ` +${price}.-`
           : "";
-        return `<button type="button" class="opt-btn ${sel}" data-group="${group}" data-opt="${opt}">${dotHtml}${group === "เมล็ดกาแฟ" ? highlightBeanTags(cleanLabel(opt)) : cleanLabel(opt)}${priceHtml}</button>`;
+        return `<button type="button" class="opt-btn ${sel}" aria-pressed="${sel ? "true" : "false"}" data-group="${group}" data-opt="${opt}">${dotHtml}${group === "เมล็ดกาแฟ" ? highlightBeanTags(cleanLabel(opt)) : cleanLabel(opt)}${priceHtml}</button>`;
       }).join("");
       const reqMarkHtml = isRequired
         ? `<span class="req-mark">* จำเป็นต้องเลือก</span>`
@@ -1407,7 +1430,14 @@ function openItemModal(id){
         } else {
           selections[id][group] = opt;
         }
-        openItemModal(id); // re-render modal with new selection highlighted
+        // Update this group in place: keep quantity, note, focus and scroll.
+        body.querySelectorAll('.opt-btn').forEach(optionButton=>{
+          if(optionButton.dataset.group === group){
+            const selected = selections[id][group] === optionButton.dataset.opt;
+            optionButton.classList.toggle('selected', selected);
+            optionButton.setAttribute('aria-pressed', String(selected));
+          }
+        });
       };
     });
   }
@@ -1497,7 +1527,7 @@ function updateCartBar(){
     document.getElementById("cbCount").textContent = count + " รายการ";
     document.getElementById("cbTotal").textContent = fmt(cartTotal());
   }
-  renderCartDrawer();
+  if(document.getElementById("drawer").classList.contains("show")) renderCartDrawer();
 }
 
 function renderCartDrawer(){
@@ -2306,23 +2336,41 @@ document.getElementById("saveAdminBtn").onclick = async ()=>{
 
 // เช็คทุก 1 นาทีเป็น fallback เผื่อ realtime หลุด / หรือกรณีไม่ได้ตั้งค่า Supabase (ใช้ localStorage เครื่องเดียว)
 // เพื่อให้สินค้าที่ตั้งเวลากลับมาขาย ขึ้นขายอัตโนมัติเมื่อถึงเวลา โดยไม่ต้องรีเฟรชหน้า
-setInterval(()=>{ loadSoldOutMap().then(renderMenu); }, 60000);
+let soldOutRefreshPending = false;
+let lastSoldOutSignature = null;
+async function refreshSoldOut(){
+  if(soldOutRefreshPending || document.hidden) return;
+  soldOutRefreshPending = true;
+  try {
+    await loadSoldOutMap();
+    const signature = JSON.stringify(Object.entries(soldOutCache).map(([id, entry])=>[id, entry.until, isCurrentlySoldOut(entry)]));
+    if(signature !== lastSoldOutSignature){
+      lastSoldOutSignature = signature;
+      renderMenu();
+    }
+  } finally { soldOutRefreshPending = false; }
+}
+setInterval(refreshSoldOut, 60000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshSoldOut(); });
 
 /* ===================== INIT ===================== */
 async function boot(){
   prefillCustomerInfoFromCookies();
 
-  await loadMenuFromSupabase(); // ถ้าไม่ได้ตั้งค่า/โหลดไม่สำเร็จ/ตารางว่าง จะยังคงใช้ FALLBACK_MENU ที่ MENU ชี้ไว้อยู่แล้ว
-  await loadCustomOptionGroups(); // กลุ่มตัวเลือกทั้งหมด (5 กลุ่มมาตรฐาน + ที่ร้านสร้างเอง) โหลดจาก Supabase
+  // Render a local menu immediately; refresh independent remote data together.
+  soldOutCache = readLocalSoldOutMap();
+  applyMenuCustomizations();
+  activeCat = defaultLandingCategory();
+  renderTabs();
+  renderMenu();
+  updateCartBar();
+  await Promise.allSettled([loadMenuFromSupabase(), loadCustomOptionGroups(), loadSoldOutMap()]);
   applyMenuCustomizations();
   activeCat = defaultLandingCategory(); // หน้าแรกที่เข้ามาเป็นหมวด Coffee เสมอ
 
   renderTabs();
   renderMenu();
   updateCartBar();
-
-  await loadSoldOutMap();
-  renderMenu();
 
   // อัปเดตเมนูแบบเรียลไทม์: พอมีเครื่องไหนแก้ไข/เพิ่ม/ลบเมนูผ่านหน้าแอดมิน ทุกเครื่องที่เปิดหน้านี้อยู่จะเห็นเมนูใหม่ทันทีโดยไม่ต้องรีเฟรช
   if(supabaseClient){
@@ -2349,6 +2397,28 @@ async function boot(){
       })
       .subscribe();
   }
+}
+// Anchor fixed purchase controls to the visible screen during pinch zoom or keyboard use.
+if(window.visualViewport){
+  const viewport = window.visualViewport;
+  let frame = 0;
+  function updateVisibleControls(){
+    frame = 0;
+    const scale = viewport.scale || 1;
+    const style = document.documentElement.style;
+    style.setProperty('--visible-left', viewport.offsetLeft + 'px');
+    style.setProperty('--visible-bottom', (viewport.offsetTop + viewport.height) + 'px');
+    style.setProperty('--control-width', (viewport.width * scale) + 'px');
+    style.setProperty('--control-height', (viewport.height * scale * .88) + 'px');
+    style.setProperty('--control-scale', String(1 / scale));
+    document.documentElement.classList.add('viewport-controls');
+  }
+  function scheduleVisibleControls(){
+    if(!frame) frame = requestAnimationFrame(updateVisibleControls);
+  }
+  viewport.addEventListener('resize', scheduleVisibleControls, {passive:true});
+  viewport.addEventListener('scroll', scheduleVisibleControls, {passive:true});
+  updateVisibleControls();
 }
 boot();
 </script>
