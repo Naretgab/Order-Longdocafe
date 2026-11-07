@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Long Do Bar — รับออเดอร์</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{--g:#00b14f;--gd:#008f40;--bg:#f2f3f5;--card:#fff;--tx:#1f2328;--mut:#7a828c;--red:#e5484d;--org:#f59e0b;--blue:#2563eb;--bd:#e5e7eb}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,"Sarabun","Noto Sans Thai",sans-serif;background:var(--bg);color:var(--tx);min-height:100vh}
+header{position:sticky;top:0;z-index:20;background:var(--g);color:#fff;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px}
+header h1{font-size:18px;margin:0;flex:1}
+.dot{width:10px;height:10px;border-radius:50%;background:#ffd0d0}
+.dot.on{background:#b9ffd3;box-shadow:0 0 0 3px rgba(255,255,255,.3)}
+header button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:8px;padding:6px 10px;font-size:14px}
+.tabs{position:sticky;top:52px;z-index:15;display:flex;background:#fff;border-bottom:1px solid var(--bd)}
+.tab{flex:1;padding:12px 4px;text-align:center;font-size:14px;border:0;background:none;color:var(--mut);border-bottom:3px solid transparent;font-weight:600}
+.tab.act{color:var(--g);border-bottom-color:var(--g)}
+.tab .n{display:inline-block;min-width:20px;padding:0 6px;border-radius:10px;background:var(--bd);color:var(--tx);font-size:12px;margin-left:4px}
+.tab.new .n.has{background:var(--red);color:#fff}
+main{padding:12px;max-width:760px;margin:0 auto}
+.empty{text-align:center;color:var(--mut);padding:60px 0}
+.card{background:var(--card);border-radius:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden}
+.card.fresh{animation:pulse 1.2s infinite;outline:2px solid var(--red)}
+@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(229,72,77,.25)}}
+.ch{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--bd)}
+.no{font-weight:800;font-size:18px}
+.badge{font-size:12px;padding:3px 8px;border-radius:999px;color:#fff;font-weight:700}
+.b-รับที่ร้าน{background:var(--blue)}.b-เดลิเวอรี่{background:var(--org)}
+.meta{padding:10px 14px;font-size:14px;line-height:1.6;color:var(--mut)}
+.meta b{color:var(--tx)}
+.items{padding:0 14px 6px}
+.it{padding:8px 0;border-top:1px dashed var(--bd);display:flex;gap:10px}
+.it .q{font-weight:800;min-width:34px;color:var(--g)}
+.it .nm{font-weight:700}
+.it .op{font-size:13px;color:var(--mut)}
+.it .nt{font-size:13px;color:var(--red)}
+.cf{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--bd);align-items:center}
+.cf .tot{flex:1;font-weight:700}
+.btn{border:0;border-radius:10px;padding:11px 16px;font-size:15px;font-weight:700;color:#fff;background:var(--g)}
+.btn.sec{background:#fff;color:var(--red);border:1px solid var(--red)}
+.btn.big{background:var(--g)}
+#login{max-width:340px;margin:12vh auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+#login input{width:100%;padding:12px;margin:6px 0;border:1px solid var(--bd);border-radius:10px;font-size:16px}
+#login h2{margin:0 0 8px;color:var(--g)}
+#err{color:var(--red);font-size:14px;min-height:20px}
+#popup{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:none;align-items:center;justify-content:center}
+#popup.show{display:flex}
+#popup div{background:#fff;border-radius:18px;padding:28px;text-align:center;max-width:320px}
+#popup h2{margin:0 0 6px;color:var(--red)}
+#snd{display:none;background:#fff3cd;padding:10px 16px;font-size:14px;text-align:center}
+</style>
+</head>
+<body>
+<div id="login" style="display:none">
+  <h2>Long Do Bar</h2>
+  <div style="color:var(--mut);font-size:14px">เข้าสู่ระบบสำหรับพนักงาน</div>
+  <input id="em" type="text" placeholder="ชื่อผู้ใช้ (username)" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+  <input id="pw" type="password" placeholder="รหัสผ่าน" autocomplete="current-password">
+  <div id="err"></div>
+  <button class="btn big" id="loginBtn" style="width:100%">เข้าสู่ระบบ</button>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <span class="dot" id="dot" title="สถานะเชื่อมต่อ"></span>
+    <h1>Long Do Bar</h1>
+    <button id="muteBtn">🔔 เสียง: เปิด</button>
+    <button id="outBtn">ออก</button>
+  </header>
+  <div id="snd">แตะที่นี่เพื่อเปิดเสียงแจ้งเตือน (เบราว์เซอร์ต้องการให้แตะก่อน 1 ครั้ง)</div>
+  <div class="tabs" id="tabs"></div>
+  <main id="list"></main>
+</div>
+
+<div id="popup"><div><h2>🔔 มีออเดอร์ใหม่!</h2><p id="popTxt"></p><button class="btn big" id="popOk">รับทราบ</button></div></div>
+
+<script>
+const SUPABASE_URL = "https://hidijpovftoklydqhxvr.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpZGlqcG92ZnRva2x5ZHFoeHZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3MDA1MTEsImV4cCI6MjEwMDI3NjUxMX0.2pl2kgTWKtERJa-otzvw8IcHsSKaAUOok8ZvhXOusKA";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const TABS = [
+  {k:"new", t:"ใหม่"},
+  {k:"preparing", t:"กำลังทำ"},
+  {k:"ready", t:"พร้อม"},
+  {k:"done", t:"เสร็จสิ้น"}
+];
+const NEXT = {
+  new:{to:"preparing", label:"รับออเดอร์"},
+  preparing:{to:"ready", label:"ทำเสร็จแล้ว"},
+  ready:{to:"done", label:"ส่งมอบแล้ว"}
+};
+let orders = new Map();
+let curTab = "new";
+let muted = false;
+let alarmTimer = null;
+let audioCtx = null;
+let channel = null;
+let pollTimer = null;
+const fresh = new Set();
+
+function esc(v){
+  return String(v == null ? "" : v).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+const $ = id => document.getElementById(id);
+const fmt = n => "฿" + Number(n||0).toLocaleString("th-TH");
+
+/* ---------- sound ---------- */
+function ensureAudio(){
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === "suspended") audioCtx.resume();
+    $("snd").style.display = audioCtx.state === "running" ? "none" : "block";
+  }catch(e){}
+}
+function beep(){
+  if(muted || !audioCtx) return;
+  try{
+    [0, .25].forEach(d=>{
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "sine"; o.frequency.value = d ? 1040 : 780;
+      g.gain.setValueAtTime(.0001, audioCtx.currentTime + d);
+      g.gain.exponentialRampToValueAtTime(.5, audioCtx.currentTime + d + .02);
+      g.gain.exponentialRampToValueAtTime(.0001, audioCtx.currentTime + d + .22);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(audioCtx.currentTime + d); o.stop(audioCtx.currentTime + d + .25);
+    });
+  }catch(e){}
+}
+function updateAlarm(){
+  const hasNew = [...orders.values()].some(o=>o.status==="new");
+  if(hasNew && !alarmTimer){
+    beep();
+    alarmTimer = setInterval(beep, 4000);
+  }else if(!hasNew && alarmTimer){
+    clearInterval(alarmTimer); alarmTimer = null;
+  }
+  if(!hasNew) $("popup").classList.remove("show");
+}
+document.addEventListener("click", ensureAudio);
+document.addEventListener("touchstart", ensureAudio, {passive:true});
+$("muteBtn").onclick = ()=>{
+  muted = !muted;
+  $("muteBtn").textContent = muted ? "🔕 เสียง: ปิด" : "🔔 เสียง: เปิด";
+};
+$("popOk").onclick = ()=> $("popup").classList.remove("show");
+
+/* ---------- render ---------- */
+function timeAgo(iso){
+  const m = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime())/60000));
+  if(m < 1) return "เมื่อสักครู่";
+  if(m < 60) return m + " นาทีที่แล้ว";
+  return new Date(iso).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"}) + " น.";
+}
+function todayStart(){ const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }
+function visible(o){
+  if(curTab === "done") return (o.status==="done"||o.status==="cancelled") && new Date(o.created_at).getTime() >= todayStart();
+  return o.status === curTab;
+}
+function render(){
+  const all = [...orders.values()];
+  $("tabs").innerHTML = TABS.map(t=>{
+    const n = all.filter(o=> t.k==="done"
+      ? (o.status==="done"||o.status==="cancelled") && new Date(o.created_at).getTime() >= todayStart()
+      : o.status===t.k).length;
+    return `<button class="tab ${t.k} ${t.k===curTab?"act":""}" data-k="${t.k}">${t.t}<span class="n ${n&&t.k==="new"?"has":""}">${n}</span></button>`;
+  }).join("");
+  document.querySelectorAll(".tab").forEach(b=> b.onclick = ()=>{ curTab = b.dataset.k; render(); });
+
+  const list = all.filter(visible).sort((a,b)=>
+    curTab==="done" ? new Date(b.created_at)-new Date(a.created_at) : new Date(a.created_at)-new Date(b.created_at));
+  if(!list.length){ $("list").innerHTML = `<div class="empty">ไม่มีออเดอร์</div>`; return; }
+
+  $("list").innerHTML = list.map(o=>{
+    const items = Array.isArray(o.items) ? o.items : [];
+    const nx = NEXT[o.status];
+    const type = esc(o.order_type);
+    return `<div class="card ${fresh.has(o.id)?"fresh":""}" data-id="${esc(o.id)}">
+      <div class="ch"><span class="no">#${esc(o.order_no)}</span>
+        <span class="badge b-${type}">${type}</span></div>
+      <div class="meta">
+        <div><b>${esc(o.customer_name)}</b> · ${esc(timeAgo(o.created_at))}</div>
+        <div>เวลา: <b>${esc(o.time_text)}</b></div>
+        ${o.address ? `<div>ที่อยู่: ${esc(o.address)}</div>` : ""}
+        ${o.note ? `<div>หมายเหตุ/เบอร์: <b>${esc(o.note)}</b></div>` : ""}
+        ${o.status==="cancelled" ? `<div style="color:var(--red);font-weight:700">ยกเลิกแล้ว</div>` : ""}
+      </div>
+      <div class="items">${items.map(it=>`
+        <div class="it"><div class="q">${esc(it.qty)}x</div><div>
+          <div class="nm">${esc(it.name)}</div>
+          ${(it.opts||[]).map(x=>`<div class="op">• ${esc(x)}</div>`).join("")}
+          ${it.note ? `<div class="nt">📝 ${esc(it.note)}</div>` : ""}
+        </div></div>`).join("")}</div>
+      <div class="cf"><div class="tot">รวม ${esc(fmt(o.total))}</div>
+        ${(o.status==="new"||o.status==="preparing") ? `<button class="btn sec" data-act="cancel">ยกเลิก</button>` : ""}
+        ${nx ? `<button class="btn" data-act="next">${nx.label}</button>` : ""}
+      </div></div>`;
+  }).join("");
+
+  document.querySelectorAll(".card").forEach(c=>{
+    const id = c.dataset.id;
+    const nb = c.querySelector('[data-act="next"]');
+    const cb = c.querySelector('[data-act="cancel"]');
+    if(nb) nb.onclick = ()=> setStatus(id, NEXT[orders.get(id).status].to);
+    if(cb) cb.onclick = ()=>{ if(confirm("ยืนยันยกเลิกออเดอร์นี้?")) setStatus(id, "cancelled"); };
+  });
+}
+
+async function setStatus(id, status){
+  const o = orders.get(id); if(!o) return;
+  const prev = o.status;
+  o.status = status; fresh.delete(id); render(); updateAlarm();
+  const { error } = await sb.from("orders").update({status, updated_at:new Date().toISOString()}).eq("id", id);
+  if(error){ o.status = prev; render(); updateAlarm(); alert("บันทึกไม่สำเร็จ: " + error.message); }
+}
+
+/* ---------- data ---------- */
+function upsertOrder(o, announce){
+  const isNew = !orders.has(o.id);
+  orders.set(o.id, o);
+  if(isNew && o.status === "new" && announce){
+    fresh.add(o.id);
+    $("popTxt").textContent = `#${o.order_no} · ${o.customer_name}`;
+    $("popup").classList.add("show");
+    ensureAudio();
+  }
+}
+async function loadOrders(announce){
+  const since = new Date(); since.setDate(since.getDate()-1); since.setHours(0,0,0,0);
+  const { data, error } = await sb.from("orders").select("*")
+    .or(`status.in.(new,preparing,ready),created_at.gte.${since.toISOString()}`)
+    .order("created_at",{ascending:true}).limit(500);
+  if(error){ $("dot").classList.remove("on"); return; }
+  const ids = new Set(data.map(o=>o.id));
+  data.forEach(o=> upsertOrder(o, announce));
+  for(const id of [...orders.keys()]) if(!ids.has(id) && orders.get(id).status==="new") orders.delete(id);
+  render(); updateAlarm();
+}
+function startRealtime(){
+  if(channel) sb.removeChannel(channel);
+  channel = sb.channel("orders-bar")
+    .on("postgres_changes",{event:"*",schema:"public",table:"orders"}, p=>{
+      if(p.eventType === "DELETE"){ orders.delete(p.old.id); }
+      else upsertOrder(p.new, true);
+      render(); updateAlarm();
+    })
+    .subscribe(st=>{
+      $("dot").classList.toggle("on", st === "SUBSCRIBED");
+      if(st === "SUBSCRIBED") loadOrders(true);
+    });
+  clearInterval(pollTimer);
+  pollTimer = setInterval(()=> loadOrders(true), 15000); // สำรองกรณี realtime หลุด
+  setInterval(render, 60000);
+}
+
+/* ---------- auth ---------- */
+function showApp(){
+  $("login").style.display = "none"; $("app").style.display = "block";
+  loadOrders(false).then(startRealtime);
+}
+function showLogin(){
+  $("app").style.display = "none"; $("login").style.display = "block";
+  clearInterval(pollTimer); clearInterval(alarmTimer); alarmTimer = null;
+}
+const EMAIL_DOMAIN = "@longdocafe.com"; // Supabase ต้องใช้รูปแบบอีเมล: username "bar" => bar@longdocafe.com
+const COOKIE_DAYS = 90;
+function setCookie(n,v,days){ document.cookie = `${n}=${encodeURIComponent(v)}; max-age=${days*86400}; path=/; SameSite=Lax`; }
+function getCookie(n){ const m = document.cookie.split("; ").find(x=>x.startsWith(n+"=")); return m ? decodeURIComponent(m.slice(n.length+1)) : ""; }
+function delCookie(n){ document.cookie = `${n}=; max-age=0; path=/`; }
+$("loginBtn").onclick = async ()=>{
+  $("err").textContent = "";
+  const u = $("em").value.trim().toLowerCase();
+  if(!u){ $("err").textContent = "กรุณากรอกชื่อผู้ใช้"; return; }
+  const email = u.includes("@") ? u : u + EMAIL_DOMAIN;
+  const { error } = await sb.auth.signInWithPassword({email, password:$("pw").value});
+  if(error){ $("err").textContent = "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"; return; }
+  setCookie("bar_username", u, COOKIE_DAYS);
+  setCookie("bar_login", "1", COOKIE_DAYS); // หมดอายุ 90 วัน => ต้องล็อกอินใหม่
+  ensureAudio(); showApp();
+};
+$("pw").addEventListener("keydown", e=>{ if(e.key==="Enter") $("loginBtn").click(); });
+$("outBtn").onclick = async ()=>{ delCookie("bar_login"); await sb.auth.signOut(); orders.clear(); showLogin(); };
+(async ()=>{
+  $("em").value = getCookie("bar_username");
+  const { data } = await sb.auth.getSession();
+  if(data && data.session && getCookie("bar_login") === "1") showApp();
+  else { if(data && data.session) await sb.auth.signOut(); showLogin(); }
+})();
+</script>
+</body>
+</html>
