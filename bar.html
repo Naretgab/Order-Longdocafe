@@ -69,7 +69,7 @@ main{padding:12px;max-width:760px;margin:0 auto}
     <button id="muteBtn">🔔 เสียง: เปิด</button>
     <button id="outBtn">ออก</button>
   </header>
-  <div id="snd">แตะที่นี่เพื่อเปิดเสียงแจ้งเตือน (เบราว์เซอร์ต้องการให้แตะก่อน 1 ครั้ง)</div>
+  <div id="snd" style="cursor:pointer;font-weight:700">🔇 เสียงยังไม่เปิด — แตะตรงนี้ 1 ครั้งเพื่อเปิดเสียงแจ้งเตือน</div>
   <div class="tabs" id="tabs"></div>
   <main id="list"></main>
 </div>
@@ -108,15 +108,25 @@ const $ = id => document.getElementById(id);
 const fmt = n => "฿" + Number(n||0).toLocaleString("th-TH");
 
 /* ---------- sound ---------- */
+function audioOk(){ return !!audioCtx && audioCtx.state === "running"; }
+function refreshSndBanner(){
+  $("snd").style.display = (!muted && !audioOk() && $("app").style.display !== "none") ? "block" : "none";
+}
 function ensureAudio(){
   try{
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if(audioCtx.state === "suspended") audioCtx.resume();
-    $("snd").style.display = audioCtx.state === "running" ? "none" : "block";
+    if(audioCtx.state !== "running"){
+      const r = audioCtx.resume();
+      if(r && r.then) r.then(refreshSndBanner, refreshSndBanner);
+    }
   }catch(e){}
+  refreshSndBanner();
 }
+setInterval(refreshSndBanner, 1500);
 function beep(){
-  if(muted || !audioCtx) return;
+  if(muted) return;
+  try{ if(navigator.vibrate) navigator.vibrate([200,100,200]); }catch(e){}
+  if(!audioCtx || audioCtx.state !== "running"){ ensureAudio(); if(!audioOk()) return; }
   try{
     [0, .25].forEach(d=>{
       const o = audioCtx.createOscillator(), g = audioCtx.createGain();
@@ -139,11 +149,13 @@ function updateAlarm(){
   }
   if(!hasNew) $("popup").classList.remove("show");
 }
-document.addEventListener("click", ensureAudio);
+document.addEventListener("click", ()=>{ const was = audioOk(); ensureAudio(); if(!was && [...orders.values()].some(o=>o.status==="new")) setTimeout(beep,100); });
 document.addEventListener("touchstart", ensureAudio, {passive:true});
 $("muteBtn").onclick = ()=>{
   muted = !muted;
   $("muteBtn").textContent = muted ? "🔕 เสียง: ปิด" : "🔔 เสียง: เปิด";
+  if(!muted){ ensureAudio(); setTimeout(beep, 50); } // กดเปิดเสียงแล้วลองดังให้ฟัง
+  refreshSndBanner();
 };
 $("popOk").onclick = ()=> $("popup").classList.remove("show");
 
