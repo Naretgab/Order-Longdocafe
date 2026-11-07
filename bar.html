@@ -66,6 +66,7 @@ main{padding:12px;max-width:760px;margin:0 auto}
   <header>
     <span class="dot" id="dot" title="สถานะเชื่อมต่อ"></span>
     <h1>Long Do Bar</h1>
+    <button id="lineBtn">📲 รับแจ้งเตือน LINE</button>
     <button id="muteBtn">🔔 เสียง: เปิด</button>
     <button id="outBtn">ออก</button>
   </header>
@@ -307,10 +308,51 @@ function startRealtime(){
   setInterval(render, 60000);
 }
 
+/* ---------- ลงทะเบียนรับแจ้งเตือนออเดอร์ใหม่ทาง LINE ---------- */
+const LIFF_ID = "2012450565-H3r4TizT";
+let liffReady = null;
+function loadLiff(){
+  if(liffReady) return liffReady;
+  liffReady = new Promise((ok, no)=>{
+    const sc = document.createElement("script");
+    sc.src = "https://static.line-scdn.net/liff/edge/2/sdk.js";
+    sc.onload = ()=> window.liff.init({ liffId: LIFF_ID }).then(ok, no);
+    sc.onerror = no;
+    document.head.appendChild(sc);
+  });
+  return liffReady;
+}
+async function registerLine(auto){
+  try{
+    await loadLiff();
+    if(!liff.isLoggedIn()){
+      if(auto) return;
+      try{ localStorage.setItem("bar_want_line","1"); }catch(e){}
+      liff.login({ redirectUri: location.href.split("#")[0].split("?")[0] });
+      return;
+    }
+    const p = await liff.getProfile();
+    const { error } = await sb.from("staff_line").upsert({ user_id: p.userId, display_name: p.displayName });
+    if(error) throw error;
+    try{ localStorage.removeItem("bar_want_line"); localStorage.setItem("bar_line_ok","1"); }catch(e){}
+    $("lineBtn").textContent = "✓ LINE: " + p.displayName;
+    if(!auto) toast("ลงทะเบียนรับแจ้งเตือนทาง LINE แล้ว");
+  }catch(e){
+    if(!auto) alert("ลงทะเบียน LINE ไม่สำเร็จ: " + (e && e.message || e));
+  }
+}
+$("lineBtn").onclick = ()=> registerLine(false);
+function autoLine(){
+  let want = false, ok = false;
+  try{ want = localStorage.getItem("bar_want_line")==="1"; ok = localStorage.getItem("bar_line_ok")==="1"; }catch(e){}
+  if(want || ok) registerLine(true);
+}
+
 /* ---------- auth ---------- */
 function showApp(){
   $("login").style.display = "none"; $("app").style.display = "block";
   loadOrders(false).then(startRealtime);
+  autoLine();
 }
 function showLogin(){
   $("app").style.display = "none"; $("login").style.display = "block";
