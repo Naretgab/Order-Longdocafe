@@ -1724,6 +1724,14 @@ document.getElementById("sendLineBtn").onclick = ()=>{
   saveLastOrderToCookies();
   const text = buildOrderText();
   submitOrderToBar();
+  if(supabaseClient && lineUserId){
+    // รู้ LINE ของลูกค้าแล้ว: ร้านจะส่งสรุปออเดอร์กลับไปทาง LINE เอง ลูกค้าไม่ต้องพิมพ์ส่งมา
+    cart = [];
+    updateCartBar(); renderCartDrawer();
+    alert("ส่งออเดอร์ให้ร้านเรียบร้อยแล้ว ✅\nร้านจะส่งข้อความสรุปออเดอร์กลับไปทาง LINE ของท่านในอีกสักครู่ค่ะ");
+    return;
+  }
+  // ไม่ทราบ LINE ของลูกค้า (เปิดนอกแอป LINE): ใช้วิธีเดิม เปิดแชทร้านพร้อมข้อความ
   const url = `https://line.me/R/oaMessage/${encodeURIComponent(LINE_OA_ID)}/?${encodeURIComponent(text)}`;
   window.open(url, "_blank");
 };
