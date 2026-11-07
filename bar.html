@@ -242,8 +242,19 @@ async function finishOrder(id, notify){
   await setStatus(id, "done");
   if(!notify || orders.get(id).status !== "done") return;
   const { data, error } = await sb.functions.invoke("notify-line", { body: { order_id: id } });
-  if(error || (data && data.error)){
-    toast("เสร็จแล้ว แต่ส่งข้อความหาลูกค้าไม่สำเร็จ: " + ((data && data.error) || error.message));
+  let detail = (data && data.error) || "";
+  if(error && !detail){
+    detail = error.message || "unknown";
+    try{ // ฟังก์ชันตอบ non-2xx: อ่านเนื้อหาจริงที่ฟังก์ชันส่งกลับ
+      if(error.context && error.context.json){ const j = await error.context.json(); detail = (j && (j.error || j.message)) || detail; }
+      else if(error.context && error.context.status){ detail += " (HTTP " + error.context.status + ")"; }
+    }catch(e){}
+    if(/Failed to send a request/i.test(detail)) detail += " — ฟังก์ชันอาจยังไม่ได้ deploy หรือชื่อไม่ใช่ notify-line";
+  }
+  if(detail){
+    console.error("notify-line failed:", error, data);
+    toast("เสร็จแล้ว แต่ส่งข้อความหาลูกค้าไม่สำเร็จ: " + detail);
+    alert("แจ้งลูกค้าไม่สำเร็จ\n" + detail);
   }else{
     o.notified_at = new Date().toISOString(); render();
     toast("ส่งข้อความแจ้งลูกค้าแล้ว ✓");
