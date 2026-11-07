@@ -1641,6 +1641,24 @@ function buildOrderText(){
 }
 
 /* ===================== ส่งออเดอร์เข้าหลังบาร์ (Supabase orders) ===================== */
+const LIFF_ID = ""; // ใส่ LIFF ID จาก LINE Developers เพื่อให้หลังบาร์แจ้งลูกค้าผ่าน LINE ได้ (เว้นว่าง = ไม่ใช้)
+let lineUserId = "";
+try{ lineUserId = localStorage.getItem("longdocafe_lineUserId") || ""; }catch(e){}
+(function initLiff(){
+  if(!LIFF_ID) return;
+  const sc = document.createElement("script");
+  sc.src = "https://static.line-scdn.net/liff/edge/2/sdk.js";
+  sc.onload = ()=>{
+    window.liff.init({ liffId: LIFF_ID }).then(()=>{
+      if(!window.liff.isLoggedIn()) return; // ไม่บังคับล็อกอิน: ลูกค้าที่เปิดผ่าน LINE (liff.line.me/...) จะได้ userId
+      return window.liff.getProfile().then(p=>{
+        lineUserId = p.userId;
+        try{ localStorage.setItem("longdocafe_lineUserId", lineUserId); }catch(e){}
+      });
+    }).catch(()=>{});
+  };
+  document.head.appendChild(sc);
+})();
 const PENDING_ORDERS_KEY = "longdocafe_pendingOrders";
 function newOrderId(){
   if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -1669,6 +1687,7 @@ function buildOrderPayload(){
     time_text: (timeOption === "กำหนดเวลา" && timeValue) ? `กำหนดเวลา ${timeValue} น.` : "ทันที",
     address: document.getElementById("custAddress").value.trim(),
     note: document.getElementById("orderNote").value.trim(),
+    line_user_id: lineUserId || null,
     items,
     total: cart.reduce((s,l)=> s + (l.unitPrice||0)*l.qty, 0)
   };

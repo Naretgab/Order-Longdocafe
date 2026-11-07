@@ -82,16 +82,12 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const TABS = [
-  {k:"new", t:"ใหม่"},
+  {k:"new", t:"ออเดอร์ใหม่"},
   {k:"preparing", t:"กำลังทำ"},
-  {k:"ready", t:"พร้อม"},
-  {k:"done", t:"เสร็จสิ้น"}
+  {k:"done", t:"เสร็จสมบูรณ์"}
 ];
-const NEXT = {
-  new:{to:"preparing", label:"รับออเดอร์"},
-  preparing:{to:"ready", label:"ทำเสร็จแล้ว"},
-  ready:{to:"done", label:"ส่งมอบแล้ว"}
-};
+const NEXT = { new:{to:"preparing", label:"รับออเดอร์"} };
+const normStatus = st => st === "ready" ? "preparing" : st; // สถานะเก่า "พร้อม" นับเป็นกำลังทำ
 let orders = new Map();
 let curTab = "new";
 let muted = false;
@@ -169,14 +165,14 @@ function timeAgo(iso){
 function todayStart(){ const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }
 function visible(o){
   if(curTab === "done") return (o.status==="done"||o.status==="cancelled") && new Date(o.created_at).getTime() >= todayStart();
-  return o.status === curTab;
+  return normStatus(o.status) === curTab;
 }
 function render(){
   const all = [...orders.values()];
   $("tabs").innerHTML = TABS.map(t=>{
     const n = all.filter(o=> t.k==="done"
       ? (o.status==="done"||o.status==="cancelled") && new Date(o.created_at).getTime() >= todayStart()
-      : o.status===t.k).length;
+      : normStatus(o.status)===t.k).length;
     return `<button class="tab ${t.k} ${t.k===curTab?"act":""}" data-k="${t.k}">${t.t}<span class="n ${n&&t.k==="new"?"has":""}">${n}</span></button>`;
   }).join("");
   document.querySelectorAll(".tab").forEach(b=> b.onclick = ()=>{ curTab = b.dataset.k; render(); });
@@ -206,9 +202,14 @@ function render(){
           ${it.note ? `<div class="nt">📝 ${esc(it.note)}</div>` : ""}
         </div></div>`).join("")}</div>
       <div class="cf"><div class="tot">รวม ${esc(fmt(o.total))}</div>
-        ${(o.status==="new"||o.status==="preparing") ? `<button class="btn sec" data-act="cancel">ยกเลิก</button>` : ""}
-        ${nx ? `<button class="btn" data-act="next">${nx.label}</button>` : ""}
-      </div></div>`;
+        ${o.status==="done" && o.notified_at ? `<span style="color:var(--g);font-size:13px">✓ แจ้งลูกค้าแล้ว</span>` : ""}
+        ${(o.status==="new"||normStatus(o.status)==="preparing") ? `<button class="btn sec" data-act="cancel">ยกเลิก</button>` : ""}
+        ${nx && o.status==="new" ? `<button class="btn" data-act="next">${nx.label}</button>` : ""}
+      </div>
+      ${normStatus(o.status)==="preparing" ? `<div class="cf" style="border-top:0;padding-top:0">
+        <button class="btn" style="flex:1" data-act="done-notify">เสร็จ (แจ้งลูกค้า)</button>
+        <button class="btn" style="flex:1;background:#6b7280" data-act="done-silent">เสร็จ (ไม่แจ้ง)</button>
+      </div>` : ""}</div>`;
   }).join("");
 
   document.querySelectorAll(".card").forEach(c=>{
@@ -217,9 +218,37 @@ function render(){
     const cb = c.querySelector('[data-act="cancel"]');
     if(nb) nb.onclick = ()=> setStatus(id, NEXT[orders.get(id).status].to);
     if(cb) cb.onclick = ()=>{ if(confirm("ยืนยันยกเลิกออเดอร์นี้?")) setStatus(id, "cancelled"); };
+    const dn = c.querySelector('[data-act="done-notify"]');
+    const ds = c.querySelector('[data-act="done-silent"]');
+    if(dn) dn.onclick = ()=> finishOrder(id, true);
+    if(ds) ds.onclick = ()=> finishOrder(id, false);
   });
 }
 
+function toast(msg){
+  let t = $("toast");
+  if(!t){ t = document.createElement("div"); t.id = "toast";
+    t.style.cssText = "position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1f2328;color:#fff;padding:12px 18px;border-radius:12px;z-index:60;max-width:90vw;text-align:center;font-size:14px";
+    document.body.appendChild(t); }
+  t.textContent = msg; t.style.display = "block";
+  clearTimeout(toast._t); toast._t = setTimeout(()=> t.style.display = "none", 4000);
+}
+async function finishOrder(id, notify){
+  const o = orders.get(id); if(!o) return;
+  if(notify && !o.line_user_id){
+    if(!confirm("ออเดอร์นี้ไม่มีข้อมูล LINE ของลูกค้า จึงแจ้งอัตโนมัติไม่ได้\nต้องการกดเสร็จ (ไม่แจ้ง) แทนหรือไม่?")) return;
+    notify = false;
+  }
+  await setStatus(id, "done");
+  if(!notify || orders.get(id).status !== "done") return;
+  const { data, error } = await sb.functions.invoke("notify-line", { body: { order_id: id } });
+  if(error || (data && data.error)){
+    toast("เสร็จแล้ว แต่ส่งข้อความหาลูกค้าไม่สำเร็จ: " + ((data && data.error) || error.message));
+  }else{
+    o.notified_at = new Date().toISOString(); render();
+    toast("ส่งข้อความแจ้งลูกค้าแล้ว ✓");
+  }
+}
 async function setStatus(id, status){
   const o = orders.get(id); if(!o) return;
   const prev = o.status;
