@@ -242,7 +242,7 @@ async function finishOrder(id, notify){
   }
   await setStatus(id, "done");
   if(!notify || orders.get(id).status !== "done") return;
-  const { data, error } = await sb.functions.invoke("notify-line", { body: { order_id: id } });
+  const { data, error } = await sb.functions.invoke("swift-endpoint", { body: { order_id: id } });
   let detail = (data && data.error) || "";
   if(error && !detail){
     detail = error.message || "unknown";
