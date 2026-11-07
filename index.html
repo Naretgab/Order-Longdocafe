@@ -1715,6 +1715,18 @@ function submitOrderToBar(){
 window.addEventListener("online", flushPendingOrders);
 setTimeout(flushPendingOrders, 3000);
 
+function showOrderSentModal(){
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px";
+  ov.innerHTML = '<div style="background:#fff;border-radius:18px;padding:26px 22px;max-width:320px;width:100%;text-align:center;font-family:inherit">'
+    + '<div style="font-size:44px">✅</div>'
+    + '<div style="font-size:18px;font-weight:700;margin:6px 0 8px">ส่งออเดอร์ให้ร้านเรียบร้อยแล้ว</div>'
+    + '<div style="font-size:15px;color:#555;line-height:1.5">ร้านจะส่งข้อความสรุปออเดอร์กลับไปทาง LINE ของท่านในอีกสักครู่ค่ะ</div>'
+    + '<button type="button" style="margin-top:18px;width:100%;border:0;border-radius:12px;padding:13px;font-size:16px;font-weight:700;color:#fff;background:#06c755">ตกลง</button></div>';
+  ov.querySelector("button").onclick = ()=> ov.remove();
+  document.body.appendChild(ov);
+}
+
 document.getElementById("sendLineBtn").onclick = ()=>{
   if(cart.length === 0){
     showToast("กรุณาเลือกเมนูก่อนส่งออเดอร์");
@@ -1728,7 +1740,7 @@ document.getElementById("sendLineBtn").onclick = ()=>{
     // รู้ LINE ของลูกค้าแล้ว: ร้านจะส่งสรุปออเดอร์กลับไปทาง LINE เอง ลูกค้าไม่ต้องพิมพ์ส่งมา
     cart = [];
     updateCartBar(); renderCartDrawer();
-    alert("ส่งออเดอร์ให้ร้านเรียบร้อยแล้ว ✅\nร้านจะส่งข้อความสรุปออเดอร์กลับไปทาง LINE ของท่านในอีกสักครู่ค่ะ");
+    showOrderSentModal();
     return;
   }
   // ไม่ทราบ LINE ของลูกค้า (เปิดนอกแอป LINE): ใช้วิธีเดิม เปิดแชทร้านพร้อมข้อความ
