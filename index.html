@@ -1659,6 +1659,38 @@ try{ lineUserId = localStorage.getItem("longdocafe_lineUserId") || ""; }catch(e)
   };
   document.head.appendChild(sc);
 })();
+let shopOpen = true;
+function applyShopState(){
+  let b = document.getElementById("closedBanner");
+  if(!shopOpen){
+    if(!b){
+      b = document.createElement("div"); b.id = "closedBanner";
+      b.style.cssText = "background:#b42318;color:#fff;text-align:center;padding:10px 14px;font-weight:700;font-size:15px;position:sticky;top:0;z-index:60";
+      b.textContent = "⛔ ร้านปิดรับออเดอร์ชั่วคราว ขออภัยในความไม่สะดวกค่ะ";
+      document.body.insertBefore(b, document.body.firstChild);
+    }
+  }else if(b){ b.remove(); }
+  const btn = document.getElementById("sendLineBtn");
+  if(btn){
+    btn.disabled = !shopOpen;
+    btn.style.opacity = shopOpen ? "" : ".5";
+  }
+}
+async function loadShopState(){
+  if(!supabaseClient) return;
+  try{
+    const { data } = await supabaseClient.from("shop_settings").select("value").eq("key","ordering").maybeSingle();
+    shopOpen = !(data && data.value && data.value.open === false);
+  }catch(e){}
+  applyShopState();
+}
+if(supabaseClient){
+  loadShopState();
+  supabaseClient.channel("shop_settings_changes")
+    .on("postgres_changes",{event:"*",schema:"public",table:"shop_settings"}, loadShopState)
+    .subscribe();
+  setInterval(loadShopState, 60000);
+}
 const PENDING_ORDERS_KEY = "longdocafe_pendingOrders";
 function newOrderId(){
   if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -1701,7 +1733,7 @@ async function flushPendingOrders(){
     try{
       const { error } = await supabaseClient.from("orders").insert(o);
       // 23505 = id ซ้ำ (เคยส่งสำเร็จแล้ว) ถือว่าสำเร็จ
-      if(error && error.code !== "23505") remaining.push(o);
+      if(error && error.code !== "23505" && error.code !== "42501") remaining.push(o);
     }catch(e){ remaining.push(o); }
   }
   writePendingOrders(remaining);
@@ -1730,6 +1762,10 @@ function showOrderSentModal(){
 document.getElementById("sendLineBtn").onclick = ()=>{
   if(cart.length === 0){
     showToast("กรุณาเลือกเมนูก่อนส่งออเดอร์");
+    return;
+  }
+  if(!shopOpen){
+    showToast("ร้านปิดรับออเดอร์ชั่วคราว");
     return;
   }
   saveCustomerInfoToCookies();

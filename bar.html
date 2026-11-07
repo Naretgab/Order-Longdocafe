@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Long Do Bar — รับออเดอร์</title>
+<link rel="manifest" href="bar.webmanifest">
+<meta name="theme-color" content="#00b14f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Long Do Bar">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <style>
 :root{--g:#00b14f;--gd:#008f40;--bg:#f2f3f5;--card:#fff;--tx:#1f2328;--mut:#7a828c;--red:#e5484d;--org:#f59e0b;--blue:#2563eb;--bd:#e5e7eb}
@@ -49,6 +57,26 @@ main{padding:12px;max-width:760px;margin:0 auto}
 #popup.show{display:flex}
 #popup div{background:#fff;border-radius:18px;padding:28px;text-align:center;max-width:320px}
 #popup h2{margin:0 0 6px;color:var(--red)}
+.warn{margin:0 14px 10px;padding:8px 10px;border-radius:10px;background:#fff4e5;color:#b45309;font-size:13px;font-weight:700}
+.call{display:inline-block;margin:2px 0 0;padding:7px 12px;border-radius:10px;background:#e8f8ef;color:var(--gd);font-weight:800;font-size:15px;text-decoration:none}
+#shopBar{display:flex;gap:8px;padding:10px 12px;background:#fff;border-bottom:1px solid var(--bd)}
+#shopBar button{flex:1;border:0;border-radius:10px;padding:10px 8px;font-size:14px;font-weight:800;color:#fff}
+#shopToggle.open{background:var(--g)} #shopToggle.closed{background:var(--red)}
+#soldBtn{background:#6b7280}
+#soldModal{position:fixed;inset:0;background:#fff;z-index:55;display:none;flex-direction:column}
+#soldModal.show{display:flex}
+#soldModal .sh{background:var(--g);color:#fff;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px}
+#soldModal .sh h2{margin:0;font-size:18px;flex:1}
+#soldModal .sh button{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:8px;padding:8px 12px;font-size:15px}
+#soldSearch{margin:10px 12px 0;padding:11px;border:1px solid var(--bd);border-radius:10px;font-size:16px}
+#soldList{flex:1;overflow:auto;padding:8px 12px 30px}
+.sc{font-weight:800;margin:14px 0 4px;color:var(--gd)}
+.sr{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--bd)}
+.sr .nm{flex:1;font-size:15px}
+.sr.out .nm{color:var(--red);font-weight:700}
+.sr input[type=time]{padding:6px;border:1px solid var(--bd);border-radius:8px;font-size:14px}
+.sr .tg{border:0;border-radius:999px;padding:7px 12px;font-weight:800;font-size:13px;color:#fff;background:var(--g);min-width:64px}
+.sr.out .tg{background:var(--red)}
 #snd{display:none;background:#fff3cd;padding:10px 16px;font-size:14px;text-align:center}
 </style>
 </head>
@@ -71,10 +99,19 @@ main{padding:12px;max-width:760px;margin:0 auto}
     <button id="outBtn">ออก</button>
   </header>
   <div id="snd" style="cursor:pointer;font-weight:700">🔇 เสียงยังไม่เปิด — แตะตรงนี้ 1 ครั้งเพื่อเปิดเสียงแจ้งเตือน</div>
+  <div id="shopBar">
+    <button id="shopToggle" class="open">🟢 เปิดรับออเดอร์</button>
+    <button id="soldBtn">🍽 เมนูหมด</button>
+  </div>
   <div class="tabs" id="tabs"></div>
   <main id="list"></main>
 </div>
 
+<div id="soldModal">
+  <div class="sh"><h2>จัดการเมนูหมด</h2><button id="soldClose">ปิด</button></div>
+  <input id="soldSearch" type="search" placeholder="ค้นหาเมนู...">
+  <div id="soldList"></div>
+</div>
 <div id="popup"><div><h2>🔔 มีออเดอร์ใหม่!</h2><p id="popTxt"></p><button class="btn big" id="popOk">รับทราบ</button></div></div>
 
 <script>
@@ -157,6 +194,10 @@ $("muteBtn").onclick = ()=>{
 $("popOk").onclick = ()=> $("popup").classList.remove("show");
 
 /* ---------- render ---------- */
+function phoneOf(t){
+  const m = String(t || "").match(/0\d[\d\s-]{7,11}\d/);
+  return m ? m[0].trim() : "";
+}
 function timeAgo(iso){
   const m = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime())/60000));
   if(m < 1) return "เมื่อสักครู่";
@@ -194,8 +235,10 @@ function render(){
         <div>เวลา: <b>${esc(o.time_text)}</b></div>
         ${o.address ? `<div>ที่อยู่: ${esc(o.address)}</div>` : ""}
         ${o.note ? `<div>หมายเหตุ/เบอร์: <b>${esc(o.note)}</b></div>` : ""}
+        ${phoneOf(o.note) ? `<a class="call" href="tel:${esc(phoneOf(o.note).replace(/\D/g,""))}">📞 โทร ${esc(phoneOf(o.note))}</a>` : ""}
         ${o.status==="cancelled" ? `<div style="color:var(--red);font-weight:700">ยกเลิกแล้ว</div>` : ""}
       </div>
+      ${(!o.line_user_id && o.status!=="cancelled") ? `<div class="warn">⚠️ ไม่มี LINE ลูกค้า — ระบบแจ้งอัตโนมัติไม่ได้ ติดต่อลูกค้าทางเบอร์โทร</div>` : ""}
       <div class="items">${items.map(it=>`
         <div class="it"><div class="q">${esc(it.qty)}x</div><div>
           <div class="nm">${esc(it.name)}</div>
@@ -308,6 +351,85 @@ function startRealtime(){
   setInterval(render, 60000);
 }
 
+/* ---------- เปิด/ปิดรับออเดอร์ ---------- */
+let shopOpen = true;
+function renderShop(){
+  const b = $("shopToggle");
+  b.className = shopOpen ? "open" : "closed";
+  b.textContent = shopOpen ? "🟢 เปิดรับออเดอร์ (แตะเพื่อปิด)" : "🔴 ปิดรับออเดอร์ (แตะเพื่อเปิด)";
+}
+async function loadShop(){
+  const { data } = await sb.from("shop_settings").select("*").eq("key","ordering").maybeSingle();
+  if(data && data.value) shopOpen = data.value.open !== false;
+  renderShop();
+}
+$("shopToggle").onclick = async ()=>{
+  const next = !shopOpen;
+  if(!confirm(next ? "เปิดรับออเดอร์อีกครั้ง?" : "ปิดรับออเดอร์ชั่วคราว?\nลูกค้าจะสั่งผ่านหน้าเว็บไม่ได้จนกว่าจะเปิดใหม่")) return;
+  const { error } = await sb.from("shop_settings").upsert({ key:"ordering", value:{ open: next }, updated_at:new Date().toISOString() });
+  if(error){ alert("บันทึกไม่สำเร็จ: " + error.message); return; }
+  shopOpen = next; renderShop();
+};
+
+/* ---------- จัดการเมนูหมด ---------- */
+let soldMap = {};   // item_id -> {until}
+let menuRows = [];
+function isOutNow(e){
+  if(!e) return false;
+  if(!e.until) return true;
+  const [h,m] = e.until.split(":").map(Number);
+  const d = new Date(); d.setHours(h,m,0,0);
+  return new Date() < d;
+}
+async function openSold(){
+  $("soldModal").classList.add("show");
+  $("soldList").innerHTML = '<div class="empty">กำลังโหลด...</div>';
+  const [m, so] = await Promise.all([
+    sb.from("menu_items").select("id,name,category,subcategory,category_order,subcategory_order,sort_order"),
+    sb.from("sold_out_items").select("*")
+  ]);
+  if(m.error || so.error){ $("soldList").innerHTML = '<div class="empty">โหลดไม่สำเร็จ: ' + esc((m.error||so.error).message) + '</div>'; return; }
+  menuRows = m.data.sort((a,b)=>(a.category_order||0)-(b.category_order||0) || (a.subcategory_order||0)-(b.subcategory_order||0) || (a.sort_order||0)-(b.sort_order||0));
+  soldMap = {}; so.data.forEach(r=> soldMap[r.item_id] = r.until ? { until: r.until } : {});
+  renderSold();
+}
+function renderSold(){
+  const q = $("soldSearch").value.trim().toLowerCase();
+  let html = "", lastCat = "";
+  menuRows.forEach(r=>{
+    if(q && !String(r.name).toLowerCase().includes(q)) return;
+    const cat = r.category + (r.subcategory ? " › " + r.subcategory : "");
+    if(cat !== lastCat){ html += `<div class="sc">${esc(cat)}</div>`; lastCat = cat; }
+    const e = soldMap[r.id], out = !!e;
+    html += `<div class="sr ${out?"out":""}" data-id="${esc(r.id)}">
+      <div class="nm">${esc(r.name)}</div>
+      ${out ? `<input type="time" value="${esc(e.until||"")}" title="เวลากลับมาขาย (เว้นว่าง = หมดจนกว่าจะปิด)">` : ""}
+      <button class="tg" type="button">${out ? "หมดอยู่" : "ปกติ"}</button></div>`;
+  });
+  $("soldList").innerHTML = html || '<div class="empty">ไม่พบเมนู</div>';
+  document.querySelectorAll("#soldList .sr").forEach(row=>{
+    const id = row.dataset.id;
+    row.querySelector(".tg").onclick = ()=> setSold(id, !soldMap[id], "");
+    const t = row.querySelector('input[type=time]');
+    if(t) t.onchange = ()=> setSold(id, true, t.value);
+  });
+}
+async function setSold(id, out, until){
+  const prev = soldMap[id];
+  if(out) soldMap[id] = until ? { until } : {}; else delete soldMap[id];
+  renderSold();
+  const res = out
+    ? await sb.from("sold_out_items").upsert({ item_id:id, until: until || null, updated_at:new Date().toISOString() })
+    : await sb.from("sold_out_items").delete().eq("item_id", id);
+  if(res.error){
+    if(prev) soldMap[id] = prev; else delete soldMap[id];
+    renderSold(); alert("บันทึกไม่สำเร็จ: " + res.error.message);
+  }
+}
+$("soldBtn").onclick = openSold;
+$("soldClose").onclick = ()=> $("soldModal").classList.remove("show");
+$("soldSearch").oninput = renderSold;
+
 /* ---------- ลงทะเบียนรับแจ้งเตือนออเดอร์ใหม่ทาง LINE ---------- */
 const LIFF_ID = "2012450565-H3r4TizT";
 let liffReady = null;
@@ -348,10 +470,21 @@ function autoLine(){
   if(want || ok) registerLine(true);
 }
 
+/* ---------- PWA: service worker + กันจอดับ ---------- */
+if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
+let wakeLock = null;
+async function keepAwake(){
+  try{ if("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); }catch(e){}
+}
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState === "visible" && $("app").style.display !== "none") keepAwake(); });
+
 /* ---------- auth ---------- */
 function showApp(){
   $("login").style.display = "none"; $("app").style.display = "block";
   loadOrders(false).then(startRealtime);
+  loadShop();
+  sb.channel("shop-bar").on("postgres_changes",{event:"*",schema:"public",table:"shop_settings"}, loadShop).subscribe();
+  keepAwake();
   autoLine();
 }
 function showLogin(){
