@@ -444,8 +444,37 @@ function loadLiff(){
   });
   return liffReady;
 }
+function isStandalone(){
+  return !!(window.navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches));
+}
+function showLineHelp(){
+  const link = `https://liff.line.me/${LIFF_ID}/bar.html?register=1`;
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:70;display:flex;align-items:center;justify-content:center;padding:20px";
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;padding:22px;max-width:360px;width:100%;font-size:15px;line-height:1.55">'
+    + '<div style="font-weight:800;font-size:17px;margin-bottom:8px">ลงทะเบียนรับแจ้งเตือน LINE</div>'
+    + 'แอปที่ติดตั้งไว้ล็อกอิน LINE โดยตรงไม่ได้ (ข้อจำกัดของ iPhone) ให้ทำครั้งเดียวผ่านแอป LINE:<ol style="padding-left:20px;margin:8px 0">'
+    + '<li>กด "คัดลอก/แชร์ลิงก์" ด้านล่าง</li><li>วางลิงก์ในแชท LINE (เช่น Keep ของตัวเอง) แล้วกดเปิด</li>'
+    + '<li>ล็อกอินหลังบาร์ในหน้าที่เปิดขึ้นมา ระบบจะลงทะเบียนให้เอง</li></ol>'
+    + '<input readonly style="width:100%;padding:9px;border:1px solid #ddd;border-radius:8px;font-size:13px" value="' + link + '">'
+    + '<div style="display:flex;gap:8px;margin-top:12px"><button id="lhShare" style="flex:1;border:0;border-radius:10px;padding:11px;font-weight:800;color:#fff;background:#00b14f">คัดลอก/แชร์ลิงก์</button>'
+    + '<button id="lhClose" style="flex:1;border:0;border-radius:10px;padding:11px;font-weight:800;background:#eee">ปิด</button></div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector("#lhClose").onclick = ()=> ov.remove();
+  ov.querySelector("#lhShare").onclick = async ()=>{
+    try{
+      if(navigator.share){ await navigator.share({ url: link }); }
+      else { await navigator.clipboard.writeText(link); toast("คัดลอกลิงก์แล้ว"); }
+    }catch(e){ try{ await navigator.clipboard.writeText(link); toast("คัดลอกลิงก์แล้ว"); }catch(_){} }
+  };
+}
 async function registerLine(auto){
   try{
+    if(!auto && isStandalone()){
+      let inClient = false;
+      try{ await loadLiff(); inClient = liff.isInClient(); }catch(e){}
+      if(!inClient){ showLineHelp(); return; }
+    }
     await loadLiff();
     if(!liff.isLoggedIn()){
       if(auto) return;
@@ -465,6 +494,7 @@ async function registerLine(auto){
 }
 $("lineBtn").onclick = ()=> registerLine(false);
 function autoLine(){
+  try{ if(/[?&]register=1/.test(location.search)) localStorage.setItem("bar_want_line","1"); }catch(e){}
   let want = false, ok = false;
   try{ want = localStorage.getItem("bar_want_line")==="1"; ok = localStorage.getItem("bar_line_ok")==="1"; }catch(e){}
   if(want || ok) registerLine(true);
