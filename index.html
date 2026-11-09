@@ -777,7 +777,7 @@ const SUPABASE_URL = "https://hidijpovftoklydqhxvr.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpZGlqcG92ZnRva2x5ZHFoeHZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3MDA1MTEsImV4cCI6MjEwMDI3NjUxMX0.2pl2kgTWKtERJa-otzvw8IcHsSKaAUOok8ZvhXOusKA";
 const SUPABASE_CONFIGURED = SUPABASE_URL.indexOf("YOUR-PROJECT") === -1 && SUPABASE_ANON_KEY.indexOf("YOUR-ANON-PUBLIC-KEY") === -1;
 const supabaseClient = (SUPABASE_CONFIGURED && window.supabase)
-  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }) // หน้าลูกค้าไม่ล็อกอิน: ไม่หยิบ session ของพนักงานที่ค้างในเบราว์เซอร์มาใช้
   : null;
 
 /* ===================== เมนู Long Do Cafe & Bakery (จากไฟล์ Menu_Table.xlsx) ===================== */
@@ -1724,25 +1724,34 @@ function buildOrderPayload(){
     total: cart.reduce((s,l)=> s + (l.unitPrice||0)*l.qty, 0)
   };
 }
-async function flushPendingOrders(){
-  if(!supabaseClient) return;
-  let list = readPendingOrders();
-  if(!list.length) return;
-  const remaining = [];
-  for(const o of list){
-    try{
-      const { error } = await supabaseClient.from("orders").insert(o);
-      // 23505 = id ซ้ำ (เคยส่งสำเร็จแล้ว) ถือว่าสำเร็จ
-      if(error && error.code !== "23505" && error.code !== "42501") remaining.push(o);
-    }catch(e){ remaining.push(o); }
-  }
-  writePendingOrders(remaining);
+let flushing = null;
+const orderResults = {}; // id -> "ok" | "rejected" | "retry"
+function flushPendingOrders(){
+  if(flushing) return flushing; // กันส่งซ้อนกัน (เช่นกดส่ง + ตัวตั้งเวลาตอนเปิดหน้า)
+  flushing = (async ()=>{
+    if(!supabaseClient) return;
+    const list = readPendingOrders();
+    if(!list.length) return;
+    const remaining = [];
+    for(const o of list){
+      try{
+        const { error } = await supabaseClient.from("orders").insert(o);
+        if(!error || error.code === "23505"){ orderResults[o.id] = "ok"; }          // 23505 = เคยส่งสำเร็จแล้ว
+        else if(error.code === "42501" || error.status === 403 || error.status === 401){ orderResults[o.id] = "rejected"; console.error("ออเดอร์ถูกปฏิเสธ:", error.message); }
+        else { orderResults[o.id] = "retry"; remaining.push(o); }
+      }catch(e){ orderResults[o.id] = "retry"; remaining.push(o); }
+    }
+    writePendingOrders(remaining);
+  })().finally(()=>{ flushing = null; });
+  return flushing;
 }
-function submitOrderToBar(){
-  if(!supabaseClient) return;
+async function submitOrderToBar(){
+  if(!supabaseClient) return false;
   const order = buildOrderPayload();
   writePendingOrders(readPendingOrders().concat([order]));
-  flushPendingOrders();
+  if(flushing) await flushing;      // รอรอบที่กำลังทำอยู่ให้จบก่อน แล้วค่อยส่งรอบของเรา
+  await flushPendingOrders();
+  return orderResults[order.id] === "ok";
 }
 window.addEventListener("online", flushPendingOrders);
 setTimeout(flushPendingOrders, 3000);
@@ -1759,7 +1768,7 @@ function showOrderSentModal(){
   document.body.appendChild(ov);
 }
 
-document.getElementById("sendLineBtn").onclick = ()=>{
+document.getElementById("sendLineBtn").onclick = async ()=>{
   if(cart.length === 0){
     showToast("กรุณาเลือกเมนูก่อนส่งออเดอร์");
     return;
@@ -1771,8 +1780,14 @@ document.getElementById("sendLineBtn").onclick = ()=>{
   saveCustomerInfoToCookies();
   saveLastOrderToCookies();
   const text = buildOrderText();
-  submitOrderToBar();
-  if(supabaseClient && lineUserId){
+  const sendBtn = document.getElementById("sendLineBtn");
+  sendBtn.disabled = true;
+  const delivered = await submitOrderToBar();
+  sendBtn.disabled = !shopOpen;
+  if(supabaseClient && !delivered){
+    showToast("ส่งเข้าระบบร้านไม่สำเร็จ กำลังเปิดแชท LINE ให้ส่งแทน");
+  }
+  if(supabaseClient && lineUserId && delivered){
     // รู้ LINE ของลูกค้าแล้ว: ร้านจะส่งสรุปออเดอร์กลับไปทาง LINE เอง ลูกค้าไม่ต้องพิมพ์ส่งมา
     cart = [];
     updateCartBar(); renderCartDrawer();
