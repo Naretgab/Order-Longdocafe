@@ -70,6 +70,8 @@ main{padding:12px;max-width:760px;margin:0 auto}
 #soldModal .sh button{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:8px;padding:8px 12px;font-size:15px}
 #soldSearch{margin:10px 12px 0;padding:11px;border:1px solid var(--bd);border-radius:10px;font-size:16px}
 #soldList{flex:1;overflow:auto;padding:8px 12px 30px}
+.day{position:sticky;top:96px;z-index:5;display:flex;justify-content:space-between;align-items:baseline;gap:8px;background:var(--bg);padding:12px 2px 8px;font-weight:800}
+.day small{font-weight:600;color:var(--mut);font-size:13px}
 .sc{font-weight:800;margin:14px 0 4px;color:var(--gd)}
 .sr{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--bd)}
 .sr .nm{flex:1;font-size:15px}
@@ -204,9 +206,19 @@ function timeAgo(iso){
   if(m < 60) return m + " นาทีที่แล้ว";
   return new Date(iso).toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"}) + " น.";
 }
+function daysAgoStart(n){ const d = new Date(); d.setDate(d.getDate()-n); d.setHours(0,0,0,0); return d.getTime(); }
+function dayKey(iso){ const d = new Date(iso); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function dayLabel(key){
+  const t = dayKey(new Date().toISOString());
+  const y = new Date(); y.setDate(y.getDate()-1);
+  if(key === t) return "วันนี้";
+  if(key === dayKey(y.toISOString())) return "เมื่อวาน";
+  const [Y,M,D] = key.split("-").map(Number);
+  return new Date(Y,M-1,D).toLocaleDateString("th-TH",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
+}
 function todayStart(){ const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }
 function visible(o){
-  if(curTab === "done") return (o.status==="done"||o.status==="cancelled") && new Date(o.created_at).getTime() >= todayStart();
+  if(curTab === "done") return (o.status==="done"||o.status==="cancelled") && new Date(o.created_at).getTime() >= daysAgoStart(30);
   return normStatus(o.status) === curTab;
 }
 function render(){
@@ -223,7 +235,7 @@ function render(){
     curTab==="done" ? new Date(b.created_at)-new Date(a.created_at) : new Date(a.created_at)-new Date(b.created_at));
   if(!list.length){ $("list").innerHTML = `<div class="empty">ไม่มีออเดอร์</div>`; return; }
 
-  $("list").innerHTML = list.map(o=>{
+  const cardHtml = o=>{
     const items = Array.isArray(o.items) ? o.items : [];
     const nx = NEXT[o.status];
     const type = esc(o.order_type);
@@ -254,7 +266,18 @@ function render(){
         <button class="btn" style="flex:1" data-act="done-notify">เสร็จ (แจ้งลูกค้า)</button>
         <button class="btn" style="flex:1;background:#6b7280" data-act="done-silent">เสร็จ (ไม่แจ้ง)</button>
       </div>` : ""}</div>`;
-  }).join("");
+  };
+  if(curTab === "done"){
+    const groups = {};
+    list.forEach(o=>{ (groups[dayKey(o.created_at)] = groups[dayKey(o.created_at)] || []).push(o); });
+    $("list").innerHTML = Object.keys(groups).sort().reverse().map(k=>{
+      const g = groups[k], ok = g.filter(o=>o.status==="done");
+      const sum = ok.reduce((t,o)=> t + Number(o.total||0), 0);
+      return `<div class="day"><span>${esc(dayLabel(k))}</span><small>${ok.length} ออเดอร์ · ${esc(fmt(sum))}${g.length-ok.length ? ` · ยกเลิก ${g.length-ok.length}` : ""}</small></div>` + g.map(cardHtml).join("");
+    }).join("");
+  }else{
+    $("list").innerHTML = list.map(cardHtml).join("");
+  }
 
   document.querySelectorAll(".card").forEach(c=>{
     const id = c.dataset.id;
@@ -323,12 +346,14 @@ function upsertOrder(o, announce){
     ensureAudio();
   }
 }
+let fullLoaded = false;
 async function loadOrders(announce){
-  const since = new Date(); since.setDate(since.getDate()-1); since.setHours(0,0,0,0);
+  const since = new Date(daysAgoStart(fullLoaded ? 1 : 30)); // ครั้งแรกโหลดย้อนหลัง 30 วัน รอบถัดไปโหลดเฉพาะล่าสุด
   const { data, error } = await sb.from("orders").select("*")
     .or(`status.in.(new,preparing,ready),created_at.gte.${since.toISOString()}`)
-    .order("created_at",{ascending:true}).limit(500);
+    .order("created_at",{ascending:true}).limit(2000);
   if(error){ $("dot").classList.remove("on"); return; }
+  fullLoaded = true;
   const ids = new Set(data.map(o=>o.id));
   data.forEach(o=> upsertOrder(o, announce));
   for(const id of [...orders.keys()]) if(!ids.has(id) && orders.get(id).status==="new") orders.delete(id);
