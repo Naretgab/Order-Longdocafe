@@ -58,6 +58,25 @@ main{padding:12px;max-width:760px;margin:0 auto}
 #popup div{background:#fff;border-radius:18px;padding:28px;text-align:center;max-width:320px}
 #popup h2{margin:0 0 6px;color:var(--red)}
 .tab .n.hold.has,.tab .n.hold{background:#f59e0b;color:#fff}
+#editModal{position:fixed;inset:0;background:var(--bg);z-index:58;display:none;flex-direction:column}
+#editModal.show{display:flex}
+#editModal .sh{background:var(--g);color:#fff;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px}
+#editModal .sh h2{margin:0;font-size:18px;flex:1}
+#editModal .sh button{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:8px;padding:8px 12px;font-size:15px}
+#editBody{flex:1;overflow:auto;padding:12px 12px 90px}
+#editBody label{display:block;font-weight:700;font-size:13px;color:var(--mut);margin:12px 0 4px}
+#editBody input,#editBody select{width:100%;padding:11px;border:1px solid var(--bd);border-radius:10px;font-size:16px;background:#fff;font-family:inherit}
+#editBody .eit{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:12px;margin-top:10px}
+#editBody .eit .r{display:flex;gap:8px;align-items:flex-end}
+#editBody .eit .r>div{flex:1}
+#editBody .eit .r>div.q{flex:0 0 74px}
+#editBody .eit .r>div.pz{flex:0 0 96px}
+#editBody .opt{display:flex;gap:6px;margin-top:6px}
+#editBody .opt input{flex:1}
+#editBody .x{border:0;background:#fdecec;color:var(--red);border-radius:8px;padding:0 12px;font-size:18px;font-weight:800}
+#editBody .add{margin-top:8px;border:1px dashed var(--g);background:#fff;color:var(--gd);border-radius:10px;padding:9px;font-weight:700;width:100%}
+#editSaveBar{position:absolute;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--bd);padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px}
+#editSaveBar .btn{flex:1}
 .hold-note{margin:0 14px 10px;padding:12px;border-radius:10px;background:#fff7e0;border:2px solid #f59e0b;color:#92400e;font-weight:800;font-size:16px}
 .hold-note small{display:block;font-weight:600;font-size:13px;margin-top:2px}
 .cnt{margin:0 14px 12px;padding:12px;border-radius:10px;background:#f3f4f6;font-weight:800;font-size:16px}
@@ -142,6 +161,12 @@ main{padding:12px;max-width:760px;margin:0 auto}
   <main id="list"></main>
 </div>
 
+<div id="editModal">
+  <div class="sh"><h2 id="editTitle">แก้ไขออเดอร์</h2><button id="editClose">ปิด</button></div>
+  <div id="editBody"></div>
+  <div id="editSaveBar"><button class="btn sec" id="editCancel" style="color:#374151;border-color:#9ca3af">ยกเลิก</button><button class="btn" id="editSave">💾 บันทึกการแก้ไข</button></div>
+  <datalist id="menuNames"></datalist>
+</div>
 <div id="printModal">
   <div class="sh"><h2>เครื่องพิมพ์ใบออเดอร์</h2><button id="printClose">ปิด</button></div>
   <div id="printBody"></div>
@@ -305,7 +330,7 @@ function render(){
         ${(o.status==="preparing"||o.status==="done") ? `<button class="btn sec" style="color:#374151;border-color:#9ca3af" data-act="reprint">🖨 พิมพ์</button>` : ""}
         ${(o.status==="new"||o.status==="pending_summary"||normStatus(o.status)==="preparing") ? `<button class="btn sec" data-act="cancel">ยกเลิก</button>` : ""}
         ${nx && o.status==="new" ? `<button class="btn" data-act="next">${nx.label}</button>` : ""}
-        ${o.status==="pending_summary" ? `<button class="btn" data-act="start">สรุปแล้ว → เริ่มทำ</button>` : ""}
+        ${o.status==="pending_summary" ? `<button class="btn sec" style="color:#1d4ed8;border-color:#1d4ed8" data-act="edit">✏️ แก้ไข</button><button class="btn" data-act="start">สรุปแล้ว → เริ่มทำ</button>` : ""}
       </div>
       ${normStatus(o.status)==="preparing" ? `<div class="cf" style="border-top:0;padding-top:0">
         <button class="btn" style="flex:1" data-act="done-notify">เสร็จ (แจ้งลูกค้า)</button>
@@ -330,6 +355,8 @@ function render(){
     const cb = c.querySelector('[data-act="cancel"]');
     if(nb) nb.onclick = ()=> setStatus(id, NEXT[orders.get(id).status].to);
     if(cb) cb.onclick = ()=>{ if(confirm("ยืนยันยกเลิกออเดอร์นี้?")) setStatus(id, "cancelled"); };
+    const ed = c.querySelector('[data-act="edit"]');
+    if(ed) ed.onclick = ()=> openEdit(id);
     const st = c.querySelector('[data-act="start"]');
     if(st) st.onclick = ()=> startPreparing(id);
     const rp = c.querySelector('[data-act="reprint"]');
@@ -436,6 +463,97 @@ function startRealtime(){
   pollTimer = setInterval(()=> loadOrders(true), 15000); // สำรองกรณี realtime หลุด
   setInterval(render, 60000);
 }
+
+/* ---------- แก้ไขรายละเอียดออเดอร์ (หน้ารอสรุป) ---------- */
+let draft = null, menuCatalog = null, totalTouched = false;
+async function loadCatalog(){
+  if(menuCatalog) return;
+  const { data } = await sb.from("menu_items").select("name,price");
+  menuCatalog = (data || []).map(r=>({ name:r.name, price:Number(r.price) || 0 }));
+  $("menuNames").innerHTML = menuCatalog.map(m=> `<option value="${esc(m.name)}"></option>`).join("");
+}
+function calcTotal(items){ return items.reduce((t,it)=> t + (Number(it.unitPrice)||0) * (Number(it.qty)||0), 0); }
+async function openEdit(id){
+  const o = orders.get(id); if(!o) return;
+  draft = {
+    id, order_no:o.order_no, customer_name:o.customer_name || "", order_type:o.order_type || "เดลิเวอรี่", time_text:o.time_text || "",
+    address:o.address || "", note:o.note || "", total:Number(o.total) || 0,
+    items:(Array.isArray(o.items) ? o.items : []).map(it=>({ name:it.name || "", qty:Number(it.qty) || 1, unitPrice:Number(it.unitPrice) || 0, opts:[...(it.opts || [])], note:it.note || "" }))
+  };
+  totalTouched = false;
+  $("editTitle").textContent = "แก้ไขออเดอร์ #" + o.order_no;
+  $("editModal").classList.add("show");
+  renderEdit();
+  loadCatalog();
+}
+function renderEdit(){
+  const d = draft;
+  let h = `<label>ชื่อลูกค้า</label><input id="eName" value="${esc(d.customer_name)}">
+    <label>ประเภท</label><select id="eType"><option ${d.order_type==="เดลิเวอรี่"?"selected":""}>เดลิเวอรี่</option><option ${d.order_type==="รับที่ร้าน"?"selected":""}>รับที่ร้าน</option></select>
+    <label>เวลาจัดส่ง / รับ</label><input id="eTime" value="${esc(d.time_text)}" placeholder="เช่น ทันที หรือ กำหนดเวลา 14:30 น.">
+    <label>ที่อยู่จัดส่ง</label><input id="eAddr" value="${esc(d.address)}">
+    <label>เบอร์โทร / หมายเหตุ</label><input id="eNote" value="${esc(d.note)}">
+    <label style="margin-top:18px;font-size:15px;color:var(--tx)">รายการสินค้า</label>`;
+  d.items.forEach((it, i)=>{
+    h += `<div class="eit" data-i="${i}"><div class="r">
+      <div><label style="margin-top:0">ชื่อสินค้า</label><input class="iName" list="menuNames" value="${esc(it.name)}"></div>
+      <div class="q"><label style="margin-top:0">จำนวน</label><input class="iQty" type="number" inputmode="numeric" min="1" value="${esc(it.qty)}"></div>
+      <div class="pz"><label style="margin-top:0">ราคา/ชิ้น</label><input class="iPrice" type="number" inputmode="decimal" min="0" value="${esc(it.unitPrice)}"></div></div>
+      <label>ตัวเลือก</label>
+      ${it.opts.map((x, k)=>`<div class="opt"><input class="iOpt" data-k="${k}" value="${esc(x)}"><button type="button" class="x" data-rmopt="${k}">×</button></div>`).join("")}
+      <button type="button" class="add" data-addopt="1">+ เพิ่มตัวเลือก</button>
+      <label>โน้ตของรายการนี้</label><input class="iNote" value="${esc(it.note)}">
+      <button type="button" class="add" style="border-color:var(--red);color:var(--red)" data-rmitem="1">ลบรายการนี้</button></div>`;
+  });
+  h += `<button type="button" class="add" id="eAddItem">+ เพิ่มรายการสินค้า</button>
+    <label style="margin-top:18px">ยอดรวม (บาท)</label>
+    <input id="eTotal" type="number" inputmode="decimal" min="0" value="${esc(d.total)}">
+    <button type="button" class="add" id="eRecalc">คำนวณยอดใหม่จากรายการ (${esc(fmt(calcTotal(d.items)))})</button>
+    <div style="font-size:12px;color:var(--mut);margin-top:6px">ถ้าไม่แตะช่องยอดรวม ระบบจะคำนวณใหม่จากรายการให้ตอนบันทึก ใส่ยอดเองได้ถ้ามีค่าส่งหรือส่วนลด</div>`;
+  $("editBody").innerHTML = h;
+  $("eTotal").oninput = ()=>{ totalTouched = true; };
+  $("eAddItem").onclick = ()=>{ readEdit(); draft.items.push({ name:"", qty:1, unitPrice:0, opts:[], note:"" }); renderEdit(); $("editBody").lastElementChild && setTimeout(()=> $("editBody").scrollTo({ top:$("editBody").scrollHeight, behavior:"smooth" }), 50); };
+  $("eRecalc").onclick = ()=>{ readEdit(); draft.total = calcTotal(draft.items); totalTouched = true; renderEdit(); };
+  document.querySelectorAll("#editBody .eit").forEach(box=>{
+    const i = Number(box.dataset.i);
+    box.querySelector("[data-addopt]").onclick = ()=>{ readEdit(); draft.items[i].opts.push(""); renderEdit(); };
+    box.querySelector("[data-rmitem]").onclick = ()=>{ if(!confirm("ลบรายการนี้?")) return; readEdit(); draft.items.splice(i, 1); renderEdit(); };
+    box.querySelectorAll("[data-rmopt]").forEach(b=> b.onclick = ()=>{ readEdit(); draft.items[i].opts.splice(Number(b.dataset.rmopt), 1); renderEdit(); });
+    box.querySelector(".iName").onchange = e=>{   // เลือกชื่อจากเมนู: เติมราคาให้ถ้ายังเป็น 0
+      const m = (menuCatalog || []).find(x=> x.name === e.target.value);
+      const pz = box.querySelector(".iPrice");
+      if(m && !Number(pz.value)) pz.value = m.price;
+    };
+  });
+}
+function readEdit(){
+  const d = draft;
+  d.customer_name = $("eName").value; d.order_type = $("eType").value; d.time_text = $("eTime").value;
+  d.address = $("eAddr").value; d.note = $("eNote").value; d.total = Number($("eTotal").value) || 0;
+  document.querySelectorAll("#editBody .eit").forEach(box=>{
+    const it = d.items[Number(box.dataset.i)]; if(!it) return;
+    it.name = box.querySelector(".iName").value; it.qty = Number(box.querySelector(".iQty").value) || 0;
+    it.unitPrice = Number(box.querySelector(".iPrice").value) || 0; it.note = box.querySelector(".iNote").value;
+    it.opts = [...box.querySelectorAll(".iOpt")].map(x=> x.value);
+  });
+}
+function closeEdit(){ $("editModal").classList.remove("show"); draft = null; }
+$("editClose").onclick = $("editCancel").onclick = ()=>{ if(!draft || confirm("ปิดโดยไม่บันทึกการแก้ไข?")) closeEdit(); };
+$("editSave").onclick = async ()=>{
+  readEdit();
+  const d = draft, items = d.items.map(it=>({ name:it.name.trim(), qty:Math.round(it.qty), unitPrice:it.unitPrice, opts:it.opts.map(x=>x.trim()).filter(Boolean), note:it.note.trim() }));
+  if(!items.length){ alert("ต้องมีสินค้าอย่างน้อย 1 รายการ"); return; }
+  if(items.some(it=> !it.name || it.qty < 1)){ alert("ทุกรายการต้องมีชื่อสินค้าและจำนวนอย่างน้อย 1"); return; }
+  const total = totalTouched ? d.total : calcTotal(items);
+  const patch = { customer_name:d.customer_name.trim() || "ลูกค้า", order_type:d.order_type, time_text:d.time_text.trim() || "ทันที",
+                  address:d.address.trim(), note:d.note.trim(), items, total, updated_at:new Date().toISOString() };
+  $("editSave").disabled = true;
+  const { error } = await sb.from("orders").update(patch).eq("id", d.id);
+  $("editSave").disabled = false;
+  if(error){ alert("บันทึกไม่สำเร็จ: " + error.message); return; }
+  Object.assign(orders.get(d.id), patch);
+  closeEdit(); render(); toast("บันทึกการแก้ไขออเดอร์แล้ว ✓");
+};
 
 /* ---------- เครื่องพิมพ์ (Bluetooth โดยตรง / LAN ผ่านโปรแกรม print-agent) ---------- */
 const PRINT_KEY = "bar_print_cfg";
