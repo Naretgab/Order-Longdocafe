@@ -57,12 +57,42 @@ main{padding:12px;max-width:760px;margin:0 auto}
 #popup.show{display:flex}
 #popup div{background:#fff;border-radius:18px;padding:28px;text-align:center;max-width:320px}
 #popup h2{margin:0 0 6px;color:var(--red)}
+.tab .n.hold.has,.tab .n.hold{background:#f59e0b;color:#fff}
+.hold-note{margin:0 14px 10px;padding:12px;border-radius:10px;background:#fff7e0;border:2px solid #f59e0b;color:#92400e;font-weight:800;font-size:16px}
+.hold-note small{display:block;font-weight:600;font-size:13px;margin-top:2px}
+.cnt{margin:0 14px 12px;padding:12px;border-radius:10px;background:#f3f4f6;font-weight:800;font-size:16px}
+#printModal{position:fixed;inset:0;background:#fff;z-index:57;display:none;flex-direction:column}
+#printModal.show{display:flex}
+#printModal .sh{background:var(--g);color:#fff;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px}
+#printModal .sh h2{margin:0;font-size:18px;flex:1}
+#printModal .sh button{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:8px;padding:8px 12px;font-size:15px}
+#printBody{flex:1;overflow:auto;padding:14px;font-size:15px;line-height:1.5}
+#printBody label{display:block;font-weight:700;margin:14px 0 4px}
+#printBody select{width:100%;padding:11px;border:1px solid var(--bd);border-radius:10px;font-size:16px}
+#printBody .box{margin-top:12px;padding:12px;border-radius:12px;background:var(--bg);font-size:14px;color:#374151}
+#printBody .row{display:flex;gap:8px;margin-top:10px}
+#printBody .row .btn{flex:1}
 .warn{margin:0 14px 10px;padding:8px 10px;border-radius:10px;background:#fff4e5;color:#b45309;font-size:13px;font-weight:700}
 .call{display:inline-block;margin:2px 0 0;padding:7px 12px;border-radius:10px;background:#e8f8ef;color:var(--gd);font-weight:800;font-size:15px;text-decoration:none}
 #shopBar{display:flex;gap:8px;padding:10px 12px;background:#fff;border-bottom:1px solid var(--bd)}
 #shopBar button{flex:1;border:0;border-radius:10px;padding:10px 8px;font-size:14px;font-weight:800;color:#fff}
 #shopToggle.open{background:var(--g)} #shopToggle.closed{background:var(--red)}
 #soldBtn{background:#6b7280}
+#teamModal{position:fixed;inset:0;background:#fff;z-index:56;display:none;flex-direction:column}
+#teamModal.show{display:flex}
+#teamModal .sh{background:var(--g);color:#fff;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px}
+#teamModal .sh h2{margin:0;font-size:18px;flex:1}
+#teamModal .sh button{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:8px;padding:8px 12px;font-size:15px}
+#teamBody{flex:1;overflow:auto;padding:12px}
+#teamBody h3{margin:16px 0 8px;font-size:15px;color:var(--gd)}
+.pr{display:flex;align-items:center;gap:10px;padding:11px 12px;background:#fff;border:1px solid var(--bd);border-radius:12px;margin-bottom:8px}
+.pr .st{width:10px;height:10px;border-radius:50%;background:#c4c9d0;flex:none}
+.pr.on .st{background:var(--g);box-shadow:0 0 0 3px rgba(0,177,79,.2)}
+.pr .nm{flex:1;font-weight:700}
+.pr .sub{font-size:13px;color:var(--mut);font-weight:400}
+.pr .rm{border:0;background:#fdecec;color:var(--red);border-radius:8px;padding:6px 10px;font-weight:700}
+.me{background:#f0faf4;border:1px dashed var(--g);border-radius:12px;padding:12px;font-size:14px}
+.me select{width:100%;padding:10px;margin-top:6px;border:1px solid var(--bd);border-radius:8px;font-size:15px}
 #soldModal{position:fixed;inset:0;background:#fff;z-index:55;display:none;flex-direction:column}
 #soldModal.show{display:flex}
 #soldModal .sh{background:var(--g);color:#fff;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px}
@@ -96,6 +126,7 @@ main{padding:12px;max-width:760px;margin:0 auto}
   <header>
     <span class="dot" id="dot" title="สถานะเชื่อมต่อ"></span>
     <h1>Long Do Bar</h1>
+    <button id="teamBtn">👥 ทีม</button>
     <button id="lineBtn">📲 รับแจ้งเตือน LINE</button>
     <button id="muteBtn">🔔 เสียง: เปิด</button>
     <button id="outBtn">ออก</button>
@@ -104,11 +135,20 @@ main{padding:12px;max-width:760px;margin:0 auto}
   <div id="shopBar">
     <button id="shopToggle" class="open">🟢 เปิดรับออเดอร์</button>
     <button id="soldBtn">🍽 เมนูหมด</button>
+    <button id="printBtn" style="background:#374151">🖨 เครื่องพิมพ์</button>
   </div>
   <div class="tabs" id="tabs"></div>
   <main id="list"></main>
 </div>
 
+<div id="printModal">
+  <div class="sh"><h2>เครื่องพิมพ์ใบออเดอร์</h2><button id="printClose">ปิด</button></div>
+  <div id="printBody"></div>
+</div>
+<div id="teamModal">
+  <div class="sh"><h2>ทีมงาน &amp; ลูกค้าล่าสุด</h2><button id="teamClose">ปิด</button></div>
+  <div id="teamBody"></div>
+</div>
 <div id="soldModal">
   <div class="sh"><h2>จัดการเมนูหมด</h2><button id="soldClose">ปิด</button></div>
   <input id="soldSearch" type="search" placeholder="ค้นหาเมนู...">
@@ -123,10 +163,11 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const TABS = [
   {k:"new", t:"ออเดอร์ใหม่"},
+  {k:"pending_summary", t:"รอสรุป"},
   {k:"preparing", t:"กำลังทำ"},
   {k:"done", t:"เสร็จสมบูรณ์"}
 ];
-const NEXT = { new:{to:"preparing", label:"รับออเดอร์"} };
+const NEXT = { new:{to:"pending_summary", label:"รับออเดอร์"} };
 const normStatus = st => st === "ready" ? "preparing" : st; // สถานะเก่า "พร้อม" นับเป็นกำลังทำ
 let orders = new Map();
 let curTab = "new";
@@ -227,7 +268,7 @@ function render(){
     const n = all.filter(o=> t.k==="done"
       ? (o.status==="done"||o.status==="cancelled") && new Date(o.created_at).getTime() >= todayStart()
       : normStatus(o.status)===t.k).length;
-    return `<button class="tab ${t.k} ${t.k===curTab?"act":""}" data-k="${t.k}">${t.t}<span class="n ${n&&t.k==="new"?"has":""}">${n}</span></button>`;
+    return `<button class="tab ${t.k} ${t.k===curTab?"act":""}" data-k="${t.k}">${t.t}<span class="n ${n&&t.k==="new"?"has":""} ${n&&t.k==="pending_summary"?"hold":""}">${n}</span></button>`;
   }).join("");
   document.querySelectorAll(".tab").forEach(b=> b.onclick = ()=>{ curTab = b.dataset.k; render(); });
 
@@ -251,16 +292,19 @@ function render(){
         ${o.status==="cancelled" ? `<div style="color:var(--red);font-weight:700">ยกเลิกแล้ว</div>` : ""}
       </div>
       ${(!o.line_user_id && o.status!=="cancelled") ? `<div class="warn">⚠️ ไม่มี LINE ลูกค้า — ระบบแจ้งอัตโนมัติไม่ได้ ติดต่อลูกค้าทางเบอร์โทร</div>` : ""}
-      <div class="items">${items.map(it=>`
+      ${o.status==="pending_summary" ? `<div class="hold-note">⏸ อย่าเพิ่งทำ — รอสรุปออเดอร์<small>ยืนยันรายการและค่าใช้จ่ายกับลูกค้าก่อน แล้วกด "สรุปแล้ว → เริ่มทำ"</small></div>` : ""}
+      ${o.status==="new" ? `<div class="cnt">🧾 ${items.length} รายการ · รวม ${items.reduce((t,it)=>t+Number(it.qty||0),0)} ชิ้น</div>` : `<div class="items">${items.map(it=>`
         <div class="it"><div class="q">${esc(it.qty)}x</div><div>
           <div class="nm">${esc(it.name)}</div>
           ${(it.opts||[]).map(x=>`<div class="op">• ${esc(x)}</div>`).join("")}
           ${it.note ? `<div class="nt">📝 ${esc(it.note)}</div>` : ""}
-        </div></div>`).join("")}</div>
+        </div></div>`).join("")}</div>`}
       <div class="cf"><div class="tot">รวม ${esc(fmt(o.total))}</div>
         ${o.status==="done" && o.notified_at ? `<span style="color:var(--g);font-size:13px">✓ แจ้งลูกค้าแล้ว</span>` : ""}
-        ${(o.status==="new"||normStatus(o.status)==="preparing") ? `<button class="btn sec" data-act="cancel">ยกเลิก</button>` : ""}
+        ${(o.status==="preparing"||o.status==="done") ? `<button class="btn sec" style="color:#374151;border-color:#9ca3af" data-act="reprint">🖨 พิมพ์</button>` : ""}
+        ${(o.status==="new"||o.status==="pending_summary"||normStatus(o.status)==="preparing") ? `<button class="btn sec" data-act="cancel">ยกเลิก</button>` : ""}
         ${nx && o.status==="new" ? `<button class="btn" data-act="next">${nx.label}</button>` : ""}
+        ${o.status==="pending_summary" ? `<button class="btn" data-act="start">สรุปแล้ว → เริ่มทำ</button>` : ""}
       </div>
       ${normStatus(o.status)==="preparing" ? `<div class="cf" style="border-top:0;padding-top:0">
         <button class="btn" style="flex:1" data-act="done-notify">เสร็จ (แจ้งลูกค้า)</button>
@@ -285,6 +329,10 @@ function render(){
     const cb = c.querySelector('[data-act="cancel"]');
     if(nb) nb.onclick = ()=> setStatus(id, NEXT[orders.get(id).status].to);
     if(cb) cb.onclick = ()=>{ if(confirm("ยืนยันยกเลิกออเดอร์นี้?")) setStatus(id, "cancelled"); };
+    const st = c.querySelector('[data-act="start"]');
+    if(st) st.onclick = ()=> startPreparing(id);
+    const rp = c.querySelector('[data-act="reprint"]');
+    if(rp) rp.onclick = ()=> printOrder(orders.get(id), true);
     const dn = c.querySelector('[data-act="done-notify"]');
     const ds = c.querySelector('[data-act="done-silent"]');
     if(dn) dn.onclick = ()=> finishOrder(id, true);
@@ -332,7 +380,19 @@ async function setStatus(id, status){
   const prev = o.status;
   o.status = status; fresh.delete(id); render(); updateAlarm();
   const { error } = await sb.from("orders").update({status, updated_at:new Date().toISOString()}).eq("id", id);
-  if(error){ o.status = prev; render(); updateAlarm(); alert("บันทึกไม่สำเร็จ: " + error.message); }
+  if(error){
+    o.status = prev; render(); updateAlarm();
+    alert("บันทึกไม่สำเร็จ: " + error.message + (/check constraint|status/i.test(error.message) ? "\n(ให้รัน migration_print_and_hold.sql ก่อน)" : ""));
+    return false;
+  }
+  return true;
+}
+// กด "สรุปแล้ว → เริ่มทำ": ย้ายไปกำลังทำ และพิมพ์ใบออเดอร์อัตโนมัติ (ถ้าเปิดไว้)
+async function startPreparing(id){
+  const ok = await setStatus(id, "preparing");
+  if(!ok) return;
+  const cfg = getPrintCfg();
+  if(cfg.mode !== "off" && cfg.auto) printOrder(orders.get(id), false);
 }
 
 /* ---------- data ---------- */
@@ -375,6 +435,264 @@ function startRealtime(){
   pollTimer = setInterval(()=> loadOrders(true), 15000); // สำรองกรณี realtime หลุด
   setInterval(render, 60000);
 }
+
+/* ---------- เครื่องพิมพ์ (Bluetooth โดยตรง / LAN ผ่านโปรแกรม print-agent) ---------- */
+const PRINT_KEY = "bar_print_cfg";
+const wait = ms => new Promise(r=> setTimeout(r, ms));
+function getPrintCfg(){
+  const d = { mode:"off", width:384, auto:true };
+  try{ return Object.assign(d, JSON.parse(localStorage.getItem(PRINT_KEY) || "{}")); }catch(e){ return d; }
+}
+function setPrintCfg(c){ try{ localStorage.setItem(PRINT_KEY, JSON.stringify(c)); }catch(e){} }
+
+// วาดใบออเดอร์เป็นภาพ (รองรับภาษาไทยทุกรุ่นเครื่องพิมพ์ ไม่ต้องตั้ง code page)
+function ticketCanvas(o, width){
+  const FONT = '"Sarabun","Noto Sans Thai","Tahoma",sans-serif';
+  const items = Array.isArray(o.items) ? o.items : [];
+  const d = new Date(o.created_at || Date.now());
+  const L = []; // {t, b, sz, al}
+  const add = (t, b, sz, al)=> L.push({ t:String(t == null ? "" : t), b:!!b, sz:sz||24, al:al||"left" });
+  add("LONG DO CAFE & BAKERY", true, 26, "center");
+  add("ออเดอร์ #" + o.order_no, true, 48, "center");
+  add(d.toLocaleDateString("th-TH",{day:"numeric",month:"short"}) + " " + d.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"}) + " น.", false, 22, "center");
+  add("--------------------------------", false, 22, "center");
+  add((o.order_type || "") + " · " + (o.time_text || ""), true, 28);
+  add("ลูกค้า: " + (o.customer_name || ""), false, 26);
+  if(o.address) add("ที่อยู่: " + o.address, false, 24);
+  if(o.note) add("หมายเหตุ/เบอร์: " + o.note, true, 26);
+  add("--------------------------------", false, 22, "center");
+  items.forEach(it=>{
+    add((it.qty || 1) + "x " + it.name, true, 30);
+    (it.opts || []).forEach(x=> add("   - " + x, false, 24));
+    if(it.note) add("   * " + it.note, true, 24);
+  });
+  add("--------------------------------", false, 22, "center");
+  add("รวม " + Number(o.total || 0).toLocaleString("th-TH") + " บาท", true, 30, "right");
+  add(" ", false, 20);
+
+  const m = document.createElement("canvas"); m.width = width;
+  let g = m.getContext("2d");
+  const pad = 6, maxW = width - pad*2;
+  const wrapped = [];
+  L.forEach(l=>{
+    g.font = (l.b ? "bold " : "") + l.sz + "px " + FONT;
+    let cur = "";
+    for(const ch of Array.from(l.t)){
+      if(g.measureText(cur + ch).width > maxW && cur){
+        const sp = cur.lastIndexOf(" ");   // ตัดที่ช่องว่างล่าสุดถ้ามี จะได้ไม่ขาดกลางคำอังกฤษ
+        if(sp > 0 && ch !== " "){ wrapped.push({ ...l, t:cur.slice(0, sp) }); cur = cur.slice(sp + 1) + ch; }
+        else{ wrapped.push({ ...l, t:cur }); cur = ch === " " ? "" : ch; }
+      }
+      else cur += ch;
+    }
+    wrapped.push({ ...l, t:cur });
+  });
+  const lh = l => Math.round(l.sz * 1.35);
+  const H = wrapped.reduce((t,l)=> t + lh(l), 0) + 10;
+  const c = document.createElement("canvas"); c.width = width; c.height = H;
+  g = c.getContext("2d");
+  g.fillStyle = "#fff"; g.fillRect(0, 0, width, H);
+  g.fillStyle = "#000"; g.textBaseline = "top";
+  let y = 4;
+  wrapped.forEach(l=>{
+    g.font = (l.b ? "bold " : "") + l.sz + "px " + FONT;
+    const w = g.measureText(l.t).width;
+    const x = l.al === "center" ? (width - w)/2 : l.al === "right" ? width - pad - w : pad;
+    g.fillText(l.t, x, y);
+    y += lh(l);
+  });
+  return c;
+}
+// แปลงภาพเป็นคำสั่ง ESC/POS แบบ raster (GS v 0) แบ่งเป็นแถบเพื่อกันเครื่องพิมพ์บัฟเฟอร์เต็ม
+function canvasToEscpos(c){
+  const w = c.width, h = c.height, bpr = w >> 3;
+  const px = c.getContext("2d").getImageData(0, 0, w, h).data;
+  const out = [0x1b, 0x40];
+  const BAND = 128;
+  for(let y0 = 0; y0 < h; y0 += BAND){
+    const rows = Math.min(BAND, h - y0);
+    out.push(0x1d, 0x76, 0x30, 0x00, bpr & 255, bpr >> 8, rows & 255, rows >> 8);
+    for(let y = y0; y < y0 + rows; y++){
+      for(let bx = 0; bx < bpr; bx++){
+        let byte = 0;
+        for(let bit = 0; bit < 8; bit++){
+          const i = (y*w + bx*8 + bit) * 4;
+          const lum = px[i]*0.299 + px[i+1]*0.587 + px[i+2]*0.114;
+          if(lum < 150 && px[i+3] > 0) byte |= (0x80 >> bit);
+        }
+        out.push(byte);
+      }
+    }
+  }
+  out.push(0x1b, 0x64, 0x05, 0x1d, 0x56, 0x42, 0x00); // ฟีดกระดาษ + ตัด (ถ้ามีใบมีด)
+  return Uint8Array.from(out);
+}
+function ticketBytes(o, width){ return canvasToEscpos(ticketCanvas(o, width)); }
+function toB64(bytes){
+  let s = "";
+  for(let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  return btoa(s);
+}
+
+// Bluetooth (Web Bluetooth: Chrome/Edge บน Android และคอมพิวเตอร์ — เครื่องพิมพ์ต้องเป็นแบบ BLE)
+const BT_SERVICES = [
+  "000018f0-0000-1000-8000-00805f9b34fb", "0000ff00-0000-1000-8000-00805f9b34fb",
+  "0000ffe0-0000-1000-8000-00805f9b34fb", "e7810a71-73ae-499d-8c15-faa9aef0c3f2",
+  "49535343-fe7d-4ae5-8fa9-9fafd205e455", "0000fee7-0000-1000-8000-00805f9b34fb"
+];
+let btDev = null, btChar = null;
+async function btFindChar(){
+  const server = btDev.gatt.connected ? btDev.gatt : await btDev.gatt.connect();
+  const services = await server.getPrimaryServices();
+  for(const sv of services){
+    const chars = await sv.getCharacteristics();
+    const c = chars.find(x=> x.properties.writeWithoutResponse || x.properties.write);
+    if(c){ btChar = c; return; }
+  }
+  throw new Error("ไม่พบช่องส่งข้อมูลของเครื่องพิมพ์ (ถ้าเป็นบลูทูธแบบคลาสสิก เว็บเชื่อมตรงไม่ได้ ให้ใช้แบบ LAN แทน)");
+}
+async function btConnect(){
+  if(!navigator.bluetooth) throw new Error("เบราว์เซอร์นี้ไม่รองรับ Web Bluetooth (ใช้ Chrome บน Android/คอมพิวเตอร์ หรือแอป Bluefy บน iPhone)");
+  btDev = await navigator.bluetooth.requestDevice({ acceptAllDevices:true, optionalServices:BT_SERVICES });
+  btDev.addEventListener("gattserverdisconnected", ()=>{ btChar = null; });
+  await btFindChar();
+}
+async function btSend(bytes){
+  if(!btDev) throw new Error("ยังไม่ได้เชื่อมต่อเครื่องพิมพ์บลูทูธ (กดปุ่ม 🖨 เครื่องพิมพ์ → เชื่อมต่อ)");
+  if(!btChar) await btFindChar();
+  const CH = 160;
+  for(let i = 0; i < bytes.length; i += CH){
+    const part = bytes.slice(i, i + CH);
+    if(btChar.properties.writeWithoutResponse) await btChar.writeValueWithoutResponse(part);
+    else await btChar.writeValue(part);
+    await wait(12);
+  }
+}
+
+async function printOrder(o, manual){
+  if(!o) return false;
+  const cfg = getPrintCfg();
+  if(cfg.mode === "off"){ if(manual) toast("ยังไม่ได้ตั้งค่าเครื่องพิมพ์ (กดปุ่ม 🖨 เครื่องพิมพ์)"); return false; }
+  try{
+    const bytes = ticketBytes(o, cfg.width);
+    if(cfg.mode === "bluetooth"){ await btSend(bytes); toast("พิมพ์ออเดอร์ #" + o.order_no + " แล้ว 🖨"); }
+    else{
+      const { error } = await sb.from("print_jobs").insert({ order_id:o.id, payload:toB64(bytes) });
+      if(error) throw error;
+      toast("ส่งคิวพิมพ์ออเดอร์ #" + o.order_no + " แล้ว 🖨");
+    }
+    return true;
+  }catch(e){
+    toast("พิมพ์ไม่สำเร็จ: " + (e && e.message || e));
+    return false;
+  }
+}
+
+async function renderPrintSettings(){
+  const cfg = getPrintCfg();
+  let html = `<label>วิธีเชื่อมต่อ</label>
+    <select id="pMode"><option value="off" ${cfg.mode==="off"?"selected":""}>ปิด (ไม่พิมพ์)</option>
+      <option value="bluetooth" ${cfg.mode==="bluetooth"?"selected":""}>Bluetooth (เชื่อมกับเครื่องนี้โดยตรง)</option>
+      <option value="lan" ${cfg.mode==="lan"?"selected":""}>สาย LAN / Wi-Fi (ผ่านโปรแกรม print-agent ที่คอมในร้าน)</option></select>
+    <label>ขนาดกระดาษ</label>
+    <select id="pWidth"><option value="384" ${cfg.width==384?"selected":""}>58 มม. (384 จุด)</option><option value="576" ${cfg.width==576?"selected":""}>80 มม. (576 จุด)</option></select>
+    <label style="display:flex;gap:8px;align-items:center;font-weight:700"><input type="checkbox" id="pAuto" ${cfg.auto?"checked":""} style="width:20px;height:20px"> พิมพ์อัตโนมัติเมื่อกด "สรุปแล้ว → เริ่มทำ"</label>`;
+  if(cfg.mode === "bluetooth"){
+    html += `<div class="box"><b>สถานะ:</b> ${btDev ? (btDev.gatt && btDev.gatt.connected ? "เชื่อมต่อ " + esc(btDev.name||"เครื่องพิมพ์") + " แล้ว ✅" : "จับคู่ " + esc(btDev.name||"") + " แล้ว (จะเชื่อมใหม่เองตอนพิมพ์)") : "ยังไม่ได้เชื่อมต่อ"}
+      <div class="row"><button class="btn" id="pConnect">เชื่อมต่อเครื่องพิมพ์ Bluetooth</button></div>
+      <div style="margin-top:8px">ต้องเปิดเครื่องพิมพ์และเปิดบลูทูธไว้ ทุกครั้งที่เปิดแอปใหม่ให้กดเชื่อมต่อ 1 ครั้ง (เบราว์เซอร์บังคับให้ผู้ใช้กดเอง) และจะพิมพ์ได้เฉพาะเครื่องที่เชื่อมต่อนี้เท่านั้น</div></div>`;
+  }
+  if(cfg.mode === "lan"){
+    html += `<div class="box" id="pLanInfo">กำลังตรวจคิวพิมพ์...</div>
+      <div class="box">แอปนี้ส่ง "งานพิมพ์" เข้าระบบ แล้วโปรแกรม <b>print-agent</b> ที่รันบนคอมในร้าน (เครื่องที่อยู่วง LAN เดียวกับเครื่องพิมพ์) จะรับไปส่งเข้าเครื่องพิมพ์ทางพอร์ต 9100 ใช้ได้กับทุกอุปกรณ์ที่ใช้แอปนี้ รวมถึง iPhone</div>`;
+  }
+  html += `<div class="row"><button class="btn" id="pTest" style="background:#374151">🖨 ทดสอบพิมพ์</button></div>`;
+  $("printBody").innerHTML = html;
+  $("pMode").onchange = e=>{ setPrintCfg({ ...getPrintCfg(), mode:e.target.value }); renderPrintSettings(); };
+  $("pWidth").onchange = e=> setPrintCfg({ ...getPrintCfg(), width:Number(e.target.value) });
+  $("pAuto").onchange = e=> setPrintCfg({ ...getPrintCfg(), auto:e.target.checked });
+  if($("pConnect")) $("pConnect").onclick = async ()=>{
+    try{ await btConnect(); toast("เชื่อมต่อเครื่องพิมพ์แล้ว ✅"); }catch(e){ if(e && e.name !== "NotFoundError") alert("เชื่อมต่อไม่สำเร็จ: " + (e.message || e)); }
+    renderPrintSettings();
+  };
+  $("pTest").onclick = ()=> printOrder({
+    id:null, order_no:"TEST", created_at:new Date().toISOString(), order_type:"รับที่ร้าน", time_text:"ทันที", customer_name:"ทดสอบเครื่องพิมพ์",
+    address:"", note:"081-234-5678", total:120,
+    items:[{ name:"อเมริกาโน่", qty:2, opts:["เย็น","ไม่เติมไซรัป 0%"], note:"" }, { name:"ครัวซองต์", qty:1, opts:[], note:"อุ่นให้ด้วย" }]
+  }, true);
+  if(cfg.mode === "lan"){
+    const q = st => sb.from("print_jobs").select("id", { count:"exact", head:true }).eq("status", st);
+    const [a, b] = await Promise.all([q("pending"), q("error")]);
+    const el = $("pLanInfo"); if(!el) return;
+    if(a.error || b.error){ el.innerHTML = "โหลดคิวพิมพ์ไม่สำเร็จ: " + esc((a.error||b.error).message) + "<br>ให้รัน migration_print_and_hold.sql ก่อน"; return; }
+    el.innerHTML = `คิวรอพิมพ์: <b>${a.count||0}</b> · พิมพ์ไม่สำเร็จ: <b style="color:${b.count?"var(--red)":"inherit"}">${b.count||0}</b>${(a.count||0) > 0 ? "<br>ถ้าคิวค้างอยู่ แปลว่าโปรแกรม print-agent ยังไม่ทำงานหรือเครื่องพิมพ์ปิดอยู่" : ""}`;
+  }
+}
+$("printBtn").onclick = ()=>{ $("printModal").classList.add("show"); renderPrintSettings(); };
+$("printClose").onclick = ()=> $("printModal").classList.remove("show");
+
+/* ---------- สถานะทีมงาน & ลูกค้าล่าสุด ---------- */
+const ACTIVE_MS = 3*60*1000;
+function myStaffId(){ try{ return localStorage.getItem("bar_staff_id") || ""; }catch(e){ return ""; } }
+function setMyStaffId(id){ try{ id ? localStorage.setItem("bar_staff_id", id) : localStorage.removeItem("bar_staff_id"); }catch(e){} }
+async function heartbeat(){
+  const id = myStaffId();
+  if(!id || document.visibilityState !== "visible" || $("app").style.display === "none") return;
+  await sb.from("staff_line").update({ last_seen_at: new Date().toISOString() }).eq("user_id", id);
+}
+setInterval(heartbeat, 60000);
+document.addEventListener("visibilitychange", heartbeat);
+function ago(iso){
+  if(!iso) return "ยังไม่เคยเปิดแอป";
+  const m = Math.floor((Date.now() - new Date(iso).getTime())/60000);
+  if(m < 1) return "เมื่อสักครู่";
+  if(m < 60) return m + " นาทีที่แล้ว";
+  const d = new Date(iso);
+  const hm = d.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"}) + " น.";
+  if(dayKey(iso) === dayKey(new Date().toISOString())) return "วันนี้ " + hm;
+  return d.toLocaleDateString("th-TH",{day:"numeric",month:"short"}) + " " + hm;
+}
+let teamTimer = null;
+async function renderTeam(){
+  const [st, od] = await Promise.all([
+    sb.from("staff_line").select("user_id,display_name,created_at,last_seen_at").order("created_at"),
+    sb.from("orders").select("order_no,created_at,customer_name,order_type,line_user_id,status").order("created_at",{ascending:false}).limit(8)
+  ]);
+  if(st.error || od.error){
+    const msg = (st.error||od.error).message;
+    $("teamBody").innerHTML = '<div class="empty">โหลดไม่สำเร็จ: ' + esc(msg) + (/last_seen_at/.test(msg) ? "<br>ให้รัน migration_presence.sql ก่อน" : "") + '</div>';
+    return;
+  }
+  const staff = st.data || [], me = myStaffId();
+  const activeN = staff.filter(x=> x.last_seen_at && Date.now()-new Date(x.last_seen_at).getTime() < ACTIVE_MS).length;
+  let html = `<div class="me">เครื่องนี้ใช้โดย (เลือกชื่อ LINE ของคุณ เพื่อให้ระบบรู้ว่าคุณกำลังเปิดแอปอยู่)
+    <select id="meSel"><option value="">— ไม่ระบุ —</option>${staff.map(x=>`<option value="${esc(x.user_id)}" ${x.user_id===me?"selected":""}>${esc(x.display_name||"(ไม่มีชื่อ)")}</option>`).join("")}</select></div>`;
+  html += `<h3>ทีมงานที่รับแจ้งเตือน LINE — กำลัง active ${activeN} / ${staff.length} คน</h3>`;
+  html += staff.length ? staff.map(x=>{
+    const on = x.last_seen_at && Date.now()-new Date(x.last_seen_at).getTime() < ACTIVE_MS;
+    return `<div class="pr ${on?"on":""}"><span class="st"></span><div class="nm">${esc(x.display_name||"(ไม่มีชื่อ)")}<div class="sub">${on ? "กำลังเปิดแอปอยู่" : "เห็นล่าสุด: " + esc(ago(x.last_seen_at))} · ลงทะเบียน ${esc(ago(x.created_at))}</div></div>
+      <button class="rm" data-uid="${esc(x.user_id)}">ลบ</button></div>`;
+  }).join("") : '<div class="empty" style="padding:20px 0">ยังไม่มีคนลงทะเบียน</div>';
+  html += `<div style="font-size:12px;color:var(--mut)">"active" = เปิดแอปค้างไว้และหน้าจออยู่บนสุดภายใน 3 นาทีล่าสุด ส่วนคนที่ปิดแอปจะยังได้รับแจ้งเตือนทาง LINE ตามปกติ</div>`;
+  const orders = od.data || [];
+  html += `<h3>ลูกค้าล่าสุด (สั่งล่าสุด ${orders[0] ? esc(ago(orders[0].created_at)) : "-"})</h3>`;
+  html += orders.length ? orders.map(o=>`<div class="pr"><div class="nm">#${esc(o.order_no)} ${esc(o.customer_name)}<div class="sub">${esc(ago(o.created_at))} · ${esc(o.order_type)}${o.line_user_id ? " · มี LINE" : " · ไม่มี LINE"}${o.status==="cancelled" ? " · ยกเลิก" : ""}</div></div></div>`).join("") : '<div class="empty" style="padding:20px 0">ยังไม่มีออเดอร์</div>';
+  $("teamBody").innerHTML = html;
+  $("meSel").onchange = async e=>{ setMyStaffId(e.target.value); await heartbeat(); renderTeam(); };
+  document.querySelectorAll("#teamBody .rm").forEach(b=> b.onclick = async ()=>{
+    if(!confirm("ลบคนนี้ออกจากรายชื่อรับแจ้งเตือน LINE?")) return;
+    const { error } = await sb.from("staff_line").delete().eq("user_id", b.dataset.uid);
+    if(error){ alert("ลบไม่สำเร็จ: " + error.message); return; }
+    if(b.dataset.uid === myStaffId()) setMyStaffId("");
+    renderTeam();
+  });
+}
+$("teamBtn").onclick = ()=>{
+  $("teamModal").classList.add("show");
+  $("teamBody").innerHTML = '<div class="empty">กำลังโหลด...</div>';
+  renderTeam(); clearInterval(teamTimer); teamTimer = setInterval(renderTeam, 30000);
+};
+$("teamClose").onclick = ()=>{ $("teamModal").classList.remove("show"); clearInterval(teamTimer); };
 
 /* ---------- เปิด/ปิดรับออเดอร์ ---------- */
 let shopOpen = true;
@@ -510,7 +828,8 @@ async function registerLine(auto){
     const p = await liff.getProfile();
     const { error } = await sb.from("staff_line").upsert({ user_id: p.userId, display_name: p.displayName });
     if(error) throw error;
-    try{ localStorage.removeItem("bar_want_line"); localStorage.setItem("bar_line_ok","1"); }catch(e){}
+    try{ localStorage.removeItem("bar_want_line"); localStorage.setItem("bar_line_ok","1"); localStorage.setItem("bar_staff_id", p.userId); }catch(e){}
+    heartbeat();
     $("lineBtn").textContent = "✓ LINE: " + p.displayName;
     if(!auto) toast("ลงทะเบียนรับแจ้งเตือนทาง LINE แล้ว");
   }catch(e){
@@ -541,6 +860,7 @@ function showApp(){
   sb.channel("shop-bar").on("postgres_changes",{event:"*",schema:"public",table:"shop_settings"}, loadShop).subscribe();
   keepAwake();
   autoLine();
+  heartbeat();
 }
 function showLogin(){
   $("app").style.display = "none"; $("login").style.display = "block";
