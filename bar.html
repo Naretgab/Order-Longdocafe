@@ -716,8 +716,30 @@ $("printClose").onclick = ()=> $("printModal").classList.remove("show");
 
 /* ---------- สถานะทีมงาน & ลูกค้าล่าสุด ---------- */
 const ACTIVE_MS = 3*60*1000;
-function myStaffId(){ try{ return localStorage.getItem("bar_staff_id") || ""; }catch(e){ return ""; } }
-function setMyStaffId(id){ try{ id ? localStorage.setItem("bar_staff_id", id) : localStorage.removeItem("bar_staff_id"); }catch(e){} }
+// จำว่าเครื่องนี้คือใคร: เก็บทั้ง localStorage และ cookie 90 วัน (อันใดอันหนึ่งหาย อีกอันยังอยู่)
+function myStaffId(){
+  let v = ""; try{ v = localStorage.getItem("bar_staff_id") || ""; }catch(e){}
+  return v || getCookie("bar_staff_id");
+}
+function setMyStaffId(id){
+  try{ id ? localStorage.setItem("bar_staff_id", id) : localStorage.removeItem("bar_staff_id"); }catch(e){}
+  id ? setCookie("bar_staff_id", id, COOKIE_DAYS) : delCookie("bar_staff_id");
+}
+// ครั้งแรกที่เปิดแอปในเครื่องนี้ ถามครั้งเดียวว่า "คุณคือใคร" (กด "ไว้ทีหลัง" จะไม่ถามอีก 7 วัน)
+async function askWho(){
+  if(myStaffId() || getCookie("bar_who_skip") === "1") return;
+  const { data, error } = await sb.from("staff_line").select("user_id,display_name").order("created_at");
+  if(error || !data || !data.length) return;
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:80;display:flex;align-items:center;justify-content:center;padding:20px";
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;padding:22px;max-width:360px;width:100%"><div style="font-weight:800;font-size:17px;margin-bottom:4px">เครื่องนี้ใครใช้อยู่?</div>'
+    + '<div style="font-size:14px;color:#6b7280;margin-bottom:12px">เลือกชื่อ LINE ของคุณ ระบบจะจำไว้ 90 วัน และแสดงสถานะ active ให้ถูกคน</div>'
+    + data.map(x=>'<button type="button" data-uid="' + esc(x.user_id) + '" style="display:block;width:100%;margin-bottom:8px;border:1px solid #e5e7eb;background:#fff;border-radius:12px;padding:13px;font-size:16px;font-weight:700;text-align:left">' + esc(x.display_name || "(ไม่มีชื่อ)") + '</button>').join("")
+    + '<button type="button" id="whoSkip" style="width:100%;border:0;background:#f3f4f6;border-radius:12px;padding:12px;font-weight:700">ไว้ทีหลัง</button></div>';
+  document.body.appendChild(ov);
+  ov.querySelectorAll("[data-uid]").forEach(b=> b.onclick = async ()=>{ setMyStaffId(b.dataset.uid); ov.remove(); await heartbeat(); toast("จำชื่อไว้แล้ว ✓"); });
+  ov.querySelector("#whoSkip").onclick = ()=>{ setCookie("bar_who_skip", "1", 7); ov.remove(); };
+}
 async function heartbeat(){
   const id = myStaffId();
   if(!id || document.visibilityState !== "visible" || $("app").style.display === "none") return;
@@ -746,7 +768,9 @@ async function renderTeam(){
     $("teamBody").innerHTML = '<div class="empty">โหลดไม่สำเร็จ: ' + esc(msg) + (/last_seen_at/.test(msg) ? "<br>ให้รัน migration_presence.sql ก่อน" : "") + '</div>';
     return;
   }
-  const staff = st.data || [], me = myStaffId();
+  const staff = st.data || [];
+  if(myStaffId() && !staff.some(x=> x.user_id === myStaffId())) setMyStaffId(""); // ชื่อถูกลบออกจากรายชื่อแล้ว
+  const me = myStaffId();
   const activeN = staff.filter(x=> x.last_seen_at && Date.now()-new Date(x.last_seen_at).getTime() < ACTIVE_MS).length;
   let html = `<div class="me">เครื่องนี้ใช้โดย (เลือกชื่อ LINE ของคุณ เพื่อให้ระบบรู้ว่าคุณกำลังเปิดแอปอยู่)
     <select id="meSel"><option value="">— ไม่ระบุ —</option>${staff.map(x=>`<option value="${esc(x.user_id)}" ${x.user_id===me?"selected":""}>${esc(x.display_name||"(ไม่มีชื่อ)")}</option>`).join("")}</select></div>`;
@@ -911,7 +935,8 @@ async function registerLine(auto){
     const p = await liff.getProfile();
     const { error } = await sb.from("staff_line").upsert({ user_id: p.userId, display_name: p.displayName });
     if(error) throw error;
-    try{ localStorage.removeItem("bar_want_line"); localStorage.setItem("bar_line_ok","1"); localStorage.setItem("bar_staff_id", p.userId); }catch(e){}
+    try{ localStorage.removeItem("bar_want_line"); localStorage.setItem("bar_line_ok","1"); }catch(e){}
+    setMyStaffId(p.userId);
     heartbeat();
     $("lineBtn").textContent = "✓ LINE: " + p.displayName;
     if(!auto) toast("ลงทะเบียนรับแจ้งเตือนทาง LINE แล้ว");
@@ -944,6 +969,7 @@ function showApp(){
   keepAwake();
   startStation();
   autoLine();
+  askWho();
   heartbeat();
 }
 function showLogin(){
