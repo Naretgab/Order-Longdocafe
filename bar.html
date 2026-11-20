@@ -137,6 +137,7 @@ main{padding:12px;max-width:760px;margin:0 auto}
     <button id="soldBtn">🍽 เมนูหมด</button>
     <button id="printBtn" style="background:#374151">🖨 เครื่องพิมพ์</button>
   </div>
+  <div id="stationBar" style="display:none;padding:10px 14px;text-align:center;font-weight:700;font-size:14px;cursor:pointer"></div>
   <div class="tabs" id="tabs"></div>
   <main id="list"></main>
 </div>
@@ -441,7 +442,11 @@ const PRINT_KEY = "bar_print_cfg";
 const wait = ms => new Promise(r=> setTimeout(r, ms));
 function getPrintCfg(){
   const d = { mode:"off", width:384, auto:true };
-  try{ return Object.assign(d, JSON.parse(localStorage.getItem(PRINT_KEY) || "{}")); }catch(e){ return d; }
+  let c = d;
+  try{ c = Object.assign(d, JSON.parse(localStorage.getItem(PRINT_KEY) || "{}")); }catch(e){}
+  if(c.mode === "bluetooth") c.mode = "station"; // ค่าเก่า
+  if(c.mode === "lan") c.mode = "queue";
+  return c;
 }
 function setPrintCfg(c){ try{ localStorage.setItem(PRINT_KEY, JSON.stringify(c)); }catch(e){} }
 
@@ -554,8 +559,22 @@ async function btFindChar(){
 async function btConnect(){
   if(!navigator.bluetooth) throw new Error("เบราว์เซอร์นี้ไม่รองรับ Web Bluetooth (ใช้ Chrome บน Android/คอมพิวเตอร์ หรือแอป Bluefy บน iPhone)");
   btDev = await navigator.bluetooth.requestDevice({ acceptAllDevices:true, optionalServices:BT_SERVICES });
-  btDev.addEventListener("gattserverdisconnected", ()=>{ btChar = null; });
+  btDev.addEventListener("gattserverdisconnected", ()=>{ btChar = null; renderStationBar(); });
+  try{ localStorage.setItem("bar_bt_name", btDev.name || ""); }catch(e){}
   await btFindChar();
+}
+function btReady(){ return !!(btDev && btDev.gatt && btDev.gatt.connected && btChar); }
+// เชื่อมใหม่เงียบๆ กับเครื่องพิมพ์ที่เคยอนุญาตไว้ (ไม่ต้องกดซ้ำ ถ้าเบราว์เซอร์รองรับ getDevices)
+async function btTryReconnect(){
+  try{
+    if(!btDev && navigator.bluetooth && navigator.bluetooth.getDevices){
+      const devs = await navigator.bluetooth.getDevices();
+      let saved = ""; try{ saved = localStorage.getItem("bar_bt_name") || ""; }catch(e){}
+      btDev = devs.find(d=> d.name === saved) || devs[0] || null;
+      if(btDev) btDev.addEventListener("gattserverdisconnected", ()=>{ btChar = null; renderStationBar(); });
+    }
+    if(btDev) await btFindChar();
+  }catch(e){ btChar = null; }
 }
 async function btSend(bytes){
   if(!btDev) throw new Error("ยังไม่ได้เชื่อมต่อเครื่องพิมพ์บลูทูธ (กดปุ่ม 🖨 เครื่องพิมพ์ → เชื่อมต่อ)");
@@ -569,63 +588,127 @@ async function btSend(bytes){
   }
 }
 
+function slimOrder(o){
+  return { order_no:o.order_no, created_at:o.created_at, order_type:o.order_type, time_text:o.time_text, customer_name:o.customer_name,
+           address:o.address || "", note:o.note || "", total:o.total, items:o.items };
+}
+function b64ToBytes(b64){ const bin = atob(b64); const u = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+
+// ทุกเครื่องสั่งพิมพ์ด้วยการ "ส่งคิว" เสมอ — เครื่องประจำร้าน (หรือ print-agent) จะรับคิวไปพิมพ์เอง
 async function printOrder(o, manual){
   if(!o) return false;
   const cfg = getPrintCfg();
   if(cfg.mode === "off"){ if(manual) toast("ยังไม่ได้ตั้งค่าเครื่องพิมพ์ (กดปุ่ม 🖨 เครื่องพิมพ์)"); return false; }
   try{
-    const bytes = ticketBytes(o, cfg.width);
-    if(cfg.mode === "bluetooth"){ await btSend(bytes); toast("พิมพ์ออเดอร์ #" + o.order_no + " แล้ว 🖨"); }
-    else{
-      const { error } = await sb.from("print_jobs").insert({ order_id:o.id, payload:toB64(bytes) });
-      if(error) throw error;
-      toast("ส่งคิวพิมพ์ออเดอร์ #" + o.order_no + " แล้ว 🖨");
-    }
+    const { error } = await sb.from("print_jobs").insert({ order_id:o.id, order_data:slimOrder(o), payload:toB64(ticketBytes(o, cfg.width)) });
+    if(error) throw error;
+    toast("ส่งคิวพิมพ์ออเดอร์ #" + o.order_no + " แล้ว 🖨");
+    if(cfg.mode === "station") runStation();
     return true;
   }catch(e){
-    toast("พิมพ์ไม่สำเร็จ: " + (e && e.message || e));
+    toast("ส่งคิวพิมพ์ไม่สำเร็จ: " + (e && e.message || e) + (/order_data|print_jobs/.test(String(e && e.message)) ? " (ให้รัน migration_print_station.sql)" : ""));
     return false;
   }
 }
 
+/* ----- เครื่องประจำร้าน: รับคิวพิมพ์ทั้งหมดแล้วพิมพ์ผ่าน Bluetooth ----- */
+let stationBusy = false, stationStarted = false;
+function stationOn(){ return getPrintCfg().mode === "station" && $("app").style.display !== "none"; }
+async function pendingCount(){
+  const r = await sb.from("print_jobs").select("id", { count:"exact", head:true }).eq("status", "pending");
+  return r.error ? null : (r.count || 0);
+}
+async function renderStationBar(){
+  const el = $("stationBar"); if(!el) return;
+  if(!stationOn()){ el.style.display = "none"; return; }
+  const ok = btReady();
+  const n = await pendingCount();
+  el.style.display = "block";
+  el.style.background = ok ? "#e8f8ef" : "#fff4e5";
+  el.style.color = ok ? "#047857" : "#b45309";
+  el.innerHTML = ok
+    ? `🖨 เครื่องพิมพ์ประจำร้าน: เชื่อมต่อ ${esc(btDev.name||"")} แล้ว ✅${n ? ` · รอพิมพ์ ${n}` : ""}`
+    : `⚠️ เครื่องพิมพ์ยังไม่เชื่อมต่อ${n ? ` (มีงานรอพิมพ์ ${n})` : ""} — <u>แตะเพื่อเชื่อมต่อ</u>`;
+  el.onclick = ok ? null : async ()=>{
+    try{ await btConnect(); toast("เชื่อมต่อเครื่องพิมพ์แล้ว ✅"); }catch(e){ if(e && e.name !== "NotFoundError") alert("เชื่อมต่อไม่สำเร็จ: " + (e.message || e)); }
+    runStation();
+  };
+}
+async function runStation(){
+  if(stationBusy || !stationOn()) return;
+  stationBusy = true;
+  try{
+    if(!btReady()) await btTryReconnect();
+    if(btReady()){
+      const { data, error } = await sb.from("print_jobs").select("id,order_data,payload").eq("status", "pending").order("created_at", { ascending:true }).limit(10);
+      if(!error) for(const j of data || []){
+        const { data: claimed } = await sb.from("print_jobs").update({ status:"printing" }).eq("id", j.id).eq("status", "pending").select("id");
+        if(!claimed || !claimed.length) continue; // มีเครื่องอื่นรับไปแล้ว
+        try{
+          const bytes = j.order_data ? ticketBytes(j.order_data, getPrintCfg().width) : b64ToBytes(j.payload);
+          await btSend(bytes);
+          await sb.from("print_jobs").update({ status:"printed", printed_at:new Date().toISOString(), error:null }).eq("id", j.id);
+          toast("พิมพ์ออเดอร์ #" + ((j.order_data && j.order_data.order_no) || "") + " แล้ว 🖨");
+          await wait(1200); // เว้นให้เครื่องพิมพ์ตัดกระดาษ/เคลียร์บัฟเฟอร์ก่อนใบถัดไป
+        }catch(e){
+          await sb.from("print_jobs").update({ status:"error", error:String(e && e.message || e).slice(0, 300) }).eq("id", j.id);
+          toast("พิมพ์ไม่สำเร็จ: " + (e && e.message || e));
+          btChar = null;
+          break;
+        }
+      }
+    }
+  }catch(e){ console.error("station:", e); }
+  finally{ stationBusy = false; renderStationBar(); }
+}
+function startStation(){
+  if(stationStarted){ runStation(); return; }
+  stationStarted = true;
+  // งานที่ค้าง "printing" เกิน 2 นาที (เช่นแอปถูกปิดกลางคัน) กลับไปรอพิมพ์ใหม่
+  if(getPrintCfg().mode === "station") sb.from("print_jobs").update({ status:"pending" }).eq("status", "printing").lt("created_at", new Date(Date.now() - 120000).toISOString()).then(()=>{}, ()=>{});
+  sb.channel("print-jobs-station").on("postgres_changes", { event:"INSERT", schema:"public", table:"print_jobs" }, ()=> runStation()).subscribe();
+  setInterval(runStation, 4000); // สำรองกรณี realtime หลุด และใช้เชื่อมเครื่องพิมพ์ใหม่อัตโนมัติ
+  runStation();
+}
+
 async function renderPrintSettings(){
   const cfg = getPrintCfg();
-  let html = `<label>วิธีเชื่อมต่อ</label>
+  let html = `<label>เครื่องนี้ทำหน้าที่</label>
     <select id="pMode"><option value="off" ${cfg.mode==="off"?"selected":""}>ปิด (ไม่พิมพ์)</option>
-      <option value="bluetooth" ${cfg.mode==="bluetooth"?"selected":""}>Bluetooth (เชื่อมกับเครื่องนี้โดยตรง)</option>
-      <option value="lan" ${cfg.mode==="lan"?"selected":""}>สาย LAN / Wi-Fi (ผ่านโปรแกรม print-agent ที่คอมในร้าน)</option></select>
-    <label>ขนาดกระดาษ</label>
-    <select id="pWidth"><option value="384" ${cfg.width==384?"selected":""}>58 มม. (384 จุด)</option><option value="576" ${cfg.width==576?"selected":""}>80 มม. (576 จุด)</option></select>
+      <option value="queue" ${cfg.mode==="queue"?"selected":""}>ส่งคิวพิมพ์ (ไปพิมพ์ที่เครื่องประจำร้าน) — สำหรับผู้จัดการ/เครื่องอื่นๆ</option>
+      <option value="station" ${cfg.mode==="station"?"selected":""}>เครื่องพิมพ์ประจำร้าน (Bluetooth) — ตั้งที่แท็บเล็ตหน้าร้านเครื่องเดียว</option></select>
     <label style="display:flex;gap:8px;align-items:center;font-weight:700"><input type="checkbox" id="pAuto" ${cfg.auto?"checked":""} style="width:20px;height:20px"> พิมพ์อัตโนมัติเมื่อกด "สรุปแล้ว → เริ่มทำ"</label>`;
-  if(cfg.mode === "bluetooth"){
-    html += `<div class="box"><b>สถานะ:</b> ${btDev ? (btDev.gatt && btDev.gatt.connected ? "เชื่อมต่อ " + esc(btDev.name||"เครื่องพิมพ์") + " แล้ว ✅" : "จับคู่ " + esc(btDev.name||"") + " แล้ว (จะเชื่อมใหม่เองตอนพิมพ์)") : "ยังไม่ได้เชื่อมต่อ"}
+  if(cfg.mode === "station"){
+    html += `<label>ขนาดกระดาษของเครื่องพิมพ์</label>
+      <select id="pWidth"><option value="384" ${cfg.width==384?"selected":""}>58 มม. (384 จุด)</option><option value="576" ${cfg.width==576?"selected":""}>80 มม. (576 จุด)</option></select>
+      <div class="box"><b>สถานะ:</b> ${btReady() ? "เชื่อมต่อ " + esc(btDev.name||"เครื่องพิมพ์") + " แล้ว ✅" : "ยังไม่ได้เชื่อมต่อ"}
       <div class="row"><button class="btn" id="pConnect">เชื่อมต่อเครื่องพิมพ์ Bluetooth</button></div>
-      <div style="margin-top:8px">ต้องเปิดเครื่องพิมพ์และเปิดบลูทูธไว้ ทุกครั้งที่เปิดแอปใหม่ให้กดเชื่อมต่อ 1 ครั้ง (เบราว์เซอร์บังคับให้ผู้ใช้กดเอง) และจะพิมพ์ได้เฉพาะเครื่องที่เชื่อมต่อนี้เท่านั้น</div></div>`;
+      <div style="margin-top:8px">เครื่องนี้จะรับงานพิมพ์จาก<b>ทุกเครื่อง</b>แล้วพิมพ์ให้เอง แม้ผู้จัดการกดสรุปจากนอกร้าน ต้องเปิดแอปนี้ค้างไว้ ต่อสายชาร์จ ไม่ปิดหน้าจอ และเปิดเครื่องพิมพ์ไว้ (ตั้งเครื่องนี้ได้เครื่องเดียวพอ)</div></div>`;
   }
-  if(cfg.mode === "lan"){
-    html += `<div class="box" id="pLanInfo">กำลังตรวจคิวพิมพ์...</div>
-      <div class="box">แอปนี้ส่ง "งานพิมพ์" เข้าระบบ แล้วโปรแกรม <b>print-agent</b> ที่รันบนคอมในร้าน (เครื่องที่อยู่วง LAN เดียวกับเครื่องพิมพ์) จะรับไปส่งเข้าเครื่องพิมพ์ทางพอร์ต 9100 ใช้ได้กับทุกอุปกรณ์ที่ใช้แอปนี้ รวมถึง iPhone</div>`;
+  if(cfg.mode === "queue"){
+    html += `<div class="box">เมื่อกดสรุป ระบบจะส่งงานพิมพ์เข้าคิว แล้วเครื่องประจำร้านที่ต่อ Bluetooth อยู่จะพิมพ์ให้ทันที</div>`;
   }
-  html += `<div class="row"><button class="btn" id="pTest" style="background:#374151">🖨 ทดสอบพิมพ์</button></div>`;
+  if(cfg.mode !== "off") html += `<div class="box" id="pQueueInfo">กำลังตรวจคิวพิมพ์...</div>`;
+  html += `<div class="row"><button class="btn" id="pTest" style="background:#374151">🖨 ทดสอบพิมพ์ (ผ่านคิว)</button></div>`;
   $("printBody").innerHTML = html;
-  $("pMode").onchange = e=>{ setPrintCfg({ ...getPrintCfg(), mode:e.target.value }); renderPrintSettings(); };
-  $("pWidth").onchange = e=> setPrintCfg({ ...getPrintCfg(), width:Number(e.target.value) });
+  $("pMode").onchange = e=>{ setPrintCfg({ ...getPrintCfg(), mode:e.target.value }); renderPrintSettings(); if(e.target.value === "station") startStation(); renderStationBar(); };
   $("pAuto").onchange = e=> setPrintCfg({ ...getPrintCfg(), auto:e.target.checked });
+  if($("pWidth")) $("pWidth").onchange = e=> setPrintCfg({ ...getPrintCfg(), width:Number(e.target.value) });
   if($("pConnect")) $("pConnect").onclick = async ()=>{
     try{ await btConnect(); toast("เชื่อมต่อเครื่องพิมพ์แล้ว ✅"); }catch(e){ if(e && e.name !== "NotFoundError") alert("เชื่อมต่อไม่สำเร็จ: " + (e.message || e)); }
-    renderPrintSettings();
+    renderPrintSettings(); runStation();
   };
   $("pTest").onclick = ()=> printOrder({
     id:null, order_no:"TEST", created_at:new Date().toISOString(), order_type:"รับที่ร้าน", time_text:"ทันที", customer_name:"ทดสอบเครื่องพิมพ์",
     address:"", note:"081-234-5678", total:120,
     items:[{ name:"อเมริกาโน่", qty:2, opts:["เย็น","ไม่เติมไซรัป 0%"], note:"" }, { name:"ครัวซองต์", qty:1, opts:[], note:"อุ่นให้ด้วย" }]
   }, true);
-  if(cfg.mode === "lan"){
+  if(cfg.mode !== "off"){
     const q = st => sb.from("print_jobs").select("id", { count:"exact", head:true }).eq("status", st);
     const [a, b] = await Promise.all([q("pending"), q("error")]);
-    const el = $("pLanInfo"); if(!el) return;
-    if(a.error || b.error){ el.innerHTML = "โหลดคิวพิมพ์ไม่สำเร็จ: " + esc((a.error||b.error).message) + "<br>ให้รัน migration_print_and_hold.sql ก่อน"; return; }
-    el.innerHTML = `คิวรอพิมพ์: <b>${a.count||0}</b> · พิมพ์ไม่สำเร็จ: <b style="color:${b.count?"var(--red)":"inherit"}">${b.count||0}</b>${(a.count||0) > 0 ? "<br>ถ้าคิวค้างอยู่ แปลว่าโปรแกรม print-agent ยังไม่ทำงานหรือเครื่องพิมพ์ปิดอยู่" : ""}`;
+    const el = $("pQueueInfo"); if(!el) return;
+    if(a.error || b.error){ el.innerHTML = "โหลดคิวพิมพ์ไม่สำเร็จ: " + esc((a.error||b.error).message) + "<br>ให้รัน migration_print_station.sql ก่อน"; return; }
+    el.innerHTML = `คิวรอพิมพ์: <b>${a.count||0}</b> · พิมพ์ไม่สำเร็จ: <b style="color:${b.count?"var(--red)":"inherit"}">${b.count||0}</b>${(a.count||0) > 0 && cfg.mode === "queue" ? "<br>ถ้าคิวค้างอยู่ แปลว่าเครื่องประจำร้านยังไม่ได้เปิดแอป/ยังไม่ได้เชื่อมต่อเครื่องพิมพ์" : ""}`;
   }
 }
 $("printBtn").onclick = ()=>{ $("printModal").classList.add("show"); renderPrintSettings(); };
@@ -859,6 +942,7 @@ function showApp(){
   loadShop();
   sb.channel("shop-bar").on("postgres_changes",{event:"*",schema:"public",table:"shop_settings"}, loadShop).subscribe();
   keepAwake();
+  startStation();
   autoLine();
   heartbeat();
 }
