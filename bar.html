@@ -188,13 +188,12 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const TABS = [
-  {k:"new", t:"ออเดอร์ใหม่"},
-  {k:"pending_summary", t:"รอสรุป"},
+  {k:"new", t:"รอสรุป"},
+  {k:"summarized", t:"ออเดอร์ใหม่"},
   {k:"preparing", t:"กำลังทำ"},
   {k:"done", t:"เสร็จสมบูรณ์"}
 ];
-const NEXT = { new:{to:"pending_summary", label:"รับออเดอร์"} };
-const normStatus = st => st === "ready" ? "preparing" : st; // สถานะเก่า "พร้อม" นับเป็นกำลังทำ
+const normStatus = st => st === "ready" ? "preparing" : st === "pending_summary" ? "new" : st; // สถานะเก่า: "พร้อม"=กำลังทำ, "รอสรุป(เดิม)"=รอสรุป // สถานะเก่า "พร้อม" นับเป็นกำลังทำ
 let orders = new Map();
 let curTab = "new";
 let muted = false;
@@ -294,7 +293,7 @@ function render(){
     const n = all.filter(o=> t.k==="done"
       ? (o.status==="done"||o.status==="cancelled") && new Date(o.created_at).getTime() >= todayStart()
       : normStatus(o.status)===t.k).length;
-    return `<button class="tab ${t.k} ${t.k===curTab?"act":""}" data-k="${t.k}">${t.t}<span class="n ${n&&t.k==="new"?"has":""} ${n&&t.k==="pending_summary"?"hold":""}">${n}</span></button>`;
+    return `<button class="tab ${t.k} ${t.k===curTab?"act":""}" data-k="${t.k}">${t.t}<span class="n ${n&&t.k==="new"?"has":""} ${n&&t.k==="summarized"?"hold":""}">${n}</span></button>`;
   }).join("");
   document.querySelectorAll(".tab").forEach(b=> b.onclick = ()=>{ curTab = b.dataset.k; render(); });
 
@@ -304,7 +303,7 @@ function render(){
 
   const cardHtml = o=>{
     const items = Array.isArray(o.items) ? o.items : [];
-    const nx = NEXT[o.status];
+    const st0 = normStatus(o.status);
     const type = esc(o.order_type);
     return `<div class="card ${fresh.has(o.id)?"fresh":""}" data-id="${esc(o.id)}">
       <div class="ch"><span class="no">#${esc(o.order_no)}</span>
@@ -318,8 +317,8 @@ function render(){
         ${o.status==="cancelled" ? `<div style="color:var(--red);font-weight:700">ยกเลิกแล้ว</div>` : ""}
       </div>
       ${(!o.line_user_id && o.status!=="cancelled") ? `<div class="warn">⚠️ ไม่มี LINE ลูกค้า — ระบบแจ้งอัตโนมัติไม่ได้ ติดต่อลูกค้าทางเบอร์โทร</div>` : ""}
-      ${o.status==="pending_summary" ? `<div class="hold-note">⏸ อย่าเพิ่งทำ — รอสรุปออเดอร์<small>ยืนยันรายการและค่าใช้จ่ายกับลูกค้าก่อน แล้วกด "สรุปแล้ว → เริ่มทำ"</small></div>` : ""}
-      ${o.status==="new" ? `<div class="cnt">🧾 ${items.length} รายการ · รวม ${items.reduce((t,it)=>t+Number(it.qty||0),0)} ชิ้น</div>` : `<div class="items">${items.map(it=>`
+      ${st0==="new" ? `<div class="hold-note">⏸ อย่าเพิ่งทำ — รอสรุปออเดอร์<small>ยืนยันรายการและค่าใช้จ่ายกับลูกค้าก่อน แล้วกด "สรุปแล้ว → ส่งไปออเดอร์ใหม่"</small></div>` : ""}
+      ${st0==="summarized" ? `<div class="cnt">🧾 ${items.length} รายการ · รวม ${items.reduce((t,it)=>t+Number(it.qty||0),0)} ชิ้น</div>` : `<div class="items">${items.map(it=>`
         <div class="it"><div class="q">${esc(it.qty)}x</div><div>
           <div class="nm">${esc(it.name)}</div>
           ${(it.opts||[]).map(x=>`<div class="op">• ${esc(x)}</div>`).join("")}
@@ -327,10 +326,10 @@ function render(){
         </div></div>`).join("")}</div>`}
       <div class="cf"><div class="tot">รวม ${esc(fmt(o.total))}</div>
         ${o.status==="done" && o.notified_at ? `<span style="color:var(--g);font-size:13px">✓ แจ้งลูกค้าแล้ว</span>` : ""}
-        ${(o.status==="preparing"||o.status==="done") ? `<button class="btn sec" style="color:#374151;border-color:#9ca3af" data-act="reprint">🖨 พิมพ์</button>` : ""}
-        ${(o.status==="new"||o.status==="pending_summary"||normStatus(o.status)==="preparing") ? `<button class="btn sec" data-act="cancel">ยกเลิก</button>` : ""}
-        ${nx && o.status==="new" ? `<button class="btn" data-act="next">${nx.label}</button>` : ""}
-        ${o.status==="pending_summary" ? `<button class="btn sec" style="color:#1d4ed8;border-color:#1d4ed8" data-act="edit">✏️ แก้ไข</button><button class="btn" data-act="start">สรุปแล้ว → เริ่มทำ</button>` : ""}
+        ${(st0==="summarized"||st0==="preparing"||o.status==="done") ? `<button class="btn sec" style="color:#374151;border-color:#9ca3af" data-act="reprint">🖨 พิมพ์</button>` : ""}
+        ${(st0==="new"||st0==="summarized"||st0==="preparing") ? `<button class="btn sec" data-act="cancel">ยกเลิก</button>` : ""}
+        ${st0==="new" ? `<button class="btn sec" style="color:#1d4ed8;border-color:#1d4ed8" data-act="edit">✏️ แก้ไข</button><button class="btn" data-act="summarize">สรุปแล้ว → ออเดอร์ใหม่ + พิมพ์</button>` : ""}
+        ${st0==="summarized" ? `<button class="btn" data-act="start">รับออเดอร์ → เริ่มทำ</button>` : ""}
       </div>
       ${normStatus(o.status)==="preparing" ? `<div class="cf" style="border-top:0;padding-top:0">
         <button class="btn" style="flex:1" data-act="done-notify">เสร็จ (แจ้งลูกค้า)</button>
@@ -351,14 +350,14 @@ function render(){
 
   document.querySelectorAll(".card").forEach(c=>{
     const id = c.dataset.id;
-    const nb = c.querySelector('[data-act="next"]');
     const cb = c.querySelector('[data-act="cancel"]');
-    if(nb) nb.onclick = ()=> setStatus(id, NEXT[orders.get(id).status].to);
     if(cb) cb.onclick = ()=>{ if(confirm("ยืนยันยกเลิกออเดอร์นี้?")) setStatus(id, "cancelled"); };
     const ed = c.querySelector('[data-act="edit"]');
     if(ed) ed.onclick = ()=> openEdit(id);
+    const sm = c.querySelector('[data-act="summarize"]');
+    if(sm) sm.onclick = ()=> summarizeOrder(id);
     const st = c.querySelector('[data-act="start"]');
-    if(st) st.onclick = ()=> startPreparing(id);
+    if(st) st.onclick = ()=> setStatus(id, "preparing");
     const rp = c.querySelector('[data-act="reprint"]');
     if(rp) rp.onclick = ()=> printOrder(orders.get(id), true);
     const dn = c.querySelector('[data-act="done-notify"]');
@@ -410,14 +409,14 @@ async function setStatus(id, status){
   const { error } = await sb.from("orders").update({status, updated_at:new Date().toISOString()}).eq("id", id);
   if(error){
     o.status = prev; render(); updateAlarm();
-    alert("บันทึกไม่สำเร็จ: " + error.message + (/check constraint|status/i.test(error.message) ? "\n(ให้รัน migration_print_and_hold.sql ก่อน)" : ""));
+    alert("บันทึกไม่สำเร็จ: " + error.message + (/check constraint|status/i.test(error.message) ? "\n(ให้รัน migration_summarized_flow.sql ก่อน)" : ""));
     return false;
   }
   return true;
 }
-// กด "สรุปแล้ว → เริ่มทำ": ย้ายไปกำลังทำ และพิมพ์ใบออเดอร์อัตโนมัติ (ถ้าเปิดไว้)
-async function startPreparing(id){
-  const ok = await setStatus(id, "preparing");
+// กด "สรุปแล้ว → ออเดอร์ใหม่": ย้ายไปหน้าออเดอร์ใหม่ และพิมพ์ใบออเดอร์อัตโนมัติ (ถ้าเปิดไว้)
+async function summarizeOrder(id){
+  const ok = await setStatus(id, "summarized");
   if(!ok) return;
   const cfg = getPrintCfg();
   if(cfg.mode !== "off" && cfg.auto) printOrder(orders.get(id), false);
@@ -438,7 +437,7 @@ let fullLoaded = false;
 async function loadOrders(announce){
   const since = new Date(daysAgoStart(fullLoaded ? 1 : 30)); // ครั้งแรกโหลดย้อนหลัง 30 วัน รอบถัดไปโหลดเฉพาะล่าสุด
   const { data, error } = await sb.from("orders").select("*")
-    .or(`status.in.(new,preparing,ready),created_at.gte.${since.toISOString()}`)
+    .or(`status.in.(new,pending_summary,summarized,preparing,ready),created_at.gte.${since.toISOString()}`)
     .order("created_at",{ascending:true}).limit(2000);
   if(error){ $("dot").classList.remove("on"); return; }
   fullLoaded = true;
@@ -575,6 +574,8 @@ function ticketCanvas(o, width){
   const d = new Date(o.created_at || Date.now());
   const L = []; // {t, b, sz, al}
   const add = (t, b, sz, al)=> L.push({ t:String(t == null ? "" : t), b:!!b, sz:sz||24, al:al||"left" });
+  L.push({ t:"อย่าลืมกดส่งในระบบ", b:true, sz:34, al:"center", inv:true }); // แถบดำตัวหนังสือขาว ตัวใหญ่ เด่นที่หัวใบ
+  add(" ", false, 10);
   add("LONG DO CAFE & BAKERY", true, 26, "center");
   add("ออเดอร์ #" + o.order_no, true, 48, "center");
   add(d.toLocaleDateString("th-TH",{day:"numeric",month:"short"}) + " " + d.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"}) + " น.", false, 22, "center");
@@ -611,17 +612,19 @@ function ticketCanvas(o, width){
     wrapped.push({ ...l, t:cur });
   });
   const lh = l => Math.round(l.sz * 1.35);
-  const H = wrapped.reduce((t,l)=> t + lh(l), 0) + 10;
+  const H = wrapped.reduce((t,l)=> t + lh(l), 0) + 18;
   const c = document.createElement("canvas"); c.width = width; c.height = H;
   g = c.getContext("2d");
   g.fillStyle = "#fff"; g.fillRect(0, 0, width, H);
   g.fillStyle = "#000"; g.textBaseline = "top";
-  let y = 4;
+  let y = 12;
   wrapped.forEach(l=>{
     g.font = (l.b ? "bold " : "") + l.sz + "px " + FONT;
     const w = g.measureText(l.t).width;
     const x = l.al === "center" ? (width - w)/2 : l.al === "right" ? width - pad - w : pad;
+    if(l.inv){ g.fillStyle = "#000"; g.fillRect(0, y - 8, width, lh(l) + 12); g.fillStyle = "#fff"; }
     g.fillText(l.t, x, y);
+    if(l.inv) g.fillStyle = "#000";
     y += lh(l);
   });
   return c;
