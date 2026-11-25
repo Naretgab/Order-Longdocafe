@@ -230,17 +230,33 @@ function beep(){
   try{ if(navigator.vibrate) navigator.vibrate([200,100,200]); }catch(e){}
   if(!audioCtx || audioCtx.state !== "running"){ ensureAudio(); if(!audioOk()) return; }
   try{
-    [0, .25].forEach(d=>{
-      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.type = "sine"; o.frequency.value = d ? 1040 : 780;
-      g.gain.setValueAtTime(.0001, audioCtx.currentTime + d);
-      g.gain.exponentialRampToValueAtTime(.5, audioCtx.currentTime + d + .02);
-      g.gain.exponentialRampToValueAtTime(.0001, audioCtx.currentTime + d + .22);
+    /* ติ๊ง-ติ๊ง-ติ๊ง ไล่เสียงขึ้นแบบตื่นเต้น แล้วตามด้วยเสียงพูด "ลองดู" */
+    [[784,0],[988,.11],[1319,.22],[1568,.33]].forEach(([f,d])=>{
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain(), t = audioCtx.currentTime + d;
+      o.type = "triangle"; o.frequency.value = f;
+      g.gain.setValueAtTime(.0001, t);
+      g.gain.exponentialRampToValueAtTime(.55, t + .015);
+      g.gain.exponentialRampToValueAtTime(.0001, t + .2);
       o.connect(g); g.connect(audioCtx.destination);
-      o.start(audioCtx.currentTime + d); o.stop(audioCtx.currentTime + d + .25);
+      o.start(t); o.stop(t + .22);
     });
   }catch(e){}
+  setTimeout(speakAlert, 520);
 }
+let thVoice = null;
+function speakAlert(){
+  try{
+    if(muted || !window.speechSynthesis) return;
+    const ss = window.speechSynthesis;
+    if(!thVoice){ thVoice = ss.getVoices().find(v=>/^th/i.test(v.lang)) || null; }
+    ss.cancel();
+    const u = new SpeechSynthesisUtterance("ลองดู");
+    u.lang = "th-TH"; if(thVoice) u.voice = thVoice;
+    u.pitch = 1.7; u.rate = 1.25; u.volume = 1; /* สูง + เร็ว = เสียงตื่นเต้น */
+    ss.speak(u);
+  }catch(e){}
+}
+if(window.speechSynthesis){ window.speechSynthesis.onvoiceschanged = ()=>{ thVoice = null; }; }
 function updateAlarm(){
   const hasNew = [...orders.values()].some(o=>o.status==="new");
   if(hasNew && !alarmTimer){
