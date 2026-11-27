@@ -369,6 +369,7 @@ function render(){
       <div class="cf"><div class="tot">รวม ${esc(fmt(o.total))}</div>
         ${o.status==="done" && o.notified_at ? `<span style="color:var(--g);font-size:13px">✓ แจ้งลูกค้าแล้ว</span>` : ""}
         ${(st0==="summarized"||st0==="preparing"||o.status==="done") ? `<button class="btn sec" style="color:#374151;border-color:#9ca3af" data-act="reprint">🖨 พิมพ์</button>` : ""}
+        ${o.status!=="cancelled" ? `<button class="btn sec" style="color:#374151;border-color:#9ca3af" data-act="png">🖼 บิล PNG</button>` : ""}
         ${(st0==="new"||st0==="summarized"||st0==="preparing") ? `<button class="btn sec" data-act="cancel">ยกเลิก</button>` : ""}
         ${st0==="new" ? `<button class="btn sec" style="color:#1d4ed8;border-color:#1d4ed8" data-act="edit">✏️ แก้ไข</button><button class="btn" data-act="summarize">สรุปแล้ว → ออเดอร์ใหม่ + พิมพ์</button>` : ""}
         ${st0==="summarized" ? `<button class="btn" data-act="start">รับออเดอร์ → เริ่มทำ</button>` : ""}
@@ -402,6 +403,8 @@ function render(){
     if(st) st.onclick = ()=> setStatus(id, "preparing");
     const rp = c.querySelector('[data-act="reprint"]');
     if(rp) rp.onclick = ()=> printOrder(orders.get(id), true);
+    const pg = c.querySelector('[data-act="png"]');
+    if(pg) pg.onclick = ()=> openBillPng(orders.get(id));
     const dn = c.querySelector('[data-act="done-notify"]');
     const ds = c.querySelector('[data-act="done-silent"]');
     if(dn) dn.onclick = ()=> finishOrder(id, true);
@@ -610,64 +613,109 @@ function getPrintCfg(){
 function setPrintCfg(c){ try{ localStorage.setItem(PRINT_KEY, JSON.stringify(c)); }catch(e){} }
 
 // วาดใบออเดอร์เป็นภาพ (รองรับภาษาไทยทุกรุ่นเครื่องพิมพ์ ไม่ต้องตั้ง code page)
-function ticketCanvas(o, width){
+/* ข้อมูลร้านบนบิล (ตรงกับ POS: ตั้งค่า → ข้อมูลร้าน) */
+const SHOP = { name:"ลองดู คาเฟ่ และเบเกอรี่", address:"6 ซอย รามอินทรา 8 แยก 12 แขวงอนุสาวรีย์ เขตบางเขน กรุงเทพมหานคร 10220",
+               phone:"082-899-7230", footer:"Good Coffee Good Bakery and Good Day" };
+const RECEIPT_LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAASwAAAF0AQAAAACx2zlCAAALDklEQVR42u2bT4zcVh3HP/ZYGRc2Oy6Xjugq4xROXFgVhBYUMoZWKFxQT4hbF4lDucCK9hCkKvNWoGYPFVk49VCRFDgigXpAAZriJatmT90tXFAFxNtdNVMJEU+yqJ6txz8Otmc9M34eA5dKxIdk4vnO7733+//nxRBqPAOTWs//Ncww68C2EHsWJ1NPDNCbehnOwPymiGrNhdETiRvzYFFTRETNgwVdEZGwOwe2np5janOhMalv8lAEgBVX6lvSTv++Uc3eIxe2gGVVyd5AxMcQiSbPEE5RO2DkIQ6ngkpqTQkaEhoil6uoSRv3eVo9xbkqanE3bopI2JH9Kmqxd9QGFvu0qqiF4meyiHoVwjqQVDfCXtytWPRwtACA7ZtBhRR24mUATu0ZYQVMRZnVRFzUw8QJ99JPr+HpYYl7LSNyhiU9Q+IeBzlnBnqGRAnP5j8I9QwZJrye7cW39XsLYwLEA4zAUlqYCaGYWx6whq+FHUZwD7aBFbOCvSGy2ZORgtgItAy58i5LTZGwI7IvHS1DOoe0u34jaYgM5EoRZk1t4ZmLNmdvQFNvp+JisAHvLCtQK0XYJLVjUwHy4s/Vhl7J417ICkCrldA90Guv7awARNeTSh9iuU8BHH88JtAuGsWJm75cC2kNtIuOWb+zVuHwh0PJ1GIBWkMdeyNOZZ8+gEh01AaD/KtGm2ak25v5kRw2coktHUNCK/kPA2UAKA3M6o/dfJ9JwtYEiYfzj41R1aLR+Ndqxph0j6+D2SfeSukXtX0wMvufVp2pVcxs76sN9Ep+omQPf72SvVb2Si7oYU7xs6Ff1MceYh0Dm1K1qGxmh21WScFgNcQGiCtgCmiF9RSpFFfm7VTJ4YrurZMlPUAjpltmC0fFn0ISX6w8Qi7d6IelsH9O7ceYCJVatbxXISzotwFcODxc01Dz7sJfS3X8BHYbYBUfroEDO7ZXBrMhSm0zW2yzlNq2KnDEBscthf0E8ODJ/GC9UpkKPi4BK9WuJjm7R5ZdACam65XBDv3v5U7m10BTY86v8HRqMW/jAbaXaJxDoDBPaLiUmvPTylL3JjnvlFBb8l/GNoDHAAxH4y0bt10EBYdepcl8xwM85PMAXJva3hjmKSzlpqIAzzKllFpuC7kY9i+VashZMH0w0tP6waTdzyj5MDWenbVIFxeMIE5JAmrlx3pqTppIwW1n+EIpzAS+Pbbnd9zldinMASIHUkezykK59i4AXkJiARg/HShP42qGsrsu8R0REUlY6mlSqYFcCXoZLJ5MxSYzB8fxs9AQd7Yq3OCv9uI09eyvPq6D3SVUz2UO5hV9ZRTIm53g+7siIklzKj0uUHvXG7rtjT2A4zZoQpt8FffVU+nPdla1gTJx+rGs+9vA8ImYcKH8CI277dP2teWhxcheqqidt3vhpc77+ctbugw/kKB79U4X6IjIRIVazLgc7uyt9pGsENGx18C+nqslx65eWP4K/dyjV9QyztDw/EpXAyyi9tMqAIaL+twyOW/Ii2kjwT9fUdwdn8eJrwGjL/kVyfaayJK0RISWdLUFVHxfhJ7fDEEmqorJReMElGLo0KnqhwyDrogoaIrIVdGmx+Y2DC5LVv1o46lxw4BnS8NMgfT9yzE076f/2NWe9KApclXCMthE3rsEq4RqMmmdEf3t0wDvzs2RLjgnaaBe3+xTA2dkLs+j5m8FA8vICtlYy5ArLVH0orxhoGPI1XURET8VVAXMb4nERqod9/VquTAwB5YzYwhTR1CNQBwjQOYljR3FJZPEI5qqPop76+6KiNyXSOSO3g0Wo1tQozK6V6+AOoSdKtj1rJ7Mki4d7Hicvm8C/FED+y5AeOwiLsAfVLnJLKS1W+4YXvyMrqUDPPoJSDxAHtc3OhglCxCrNPaXwgKA2F3L0wdPnx4zvA3cW6zSkPGLw1Tp3fJqd/zHzknGXJJs57uQTQDjHa90b9FJdyrdRK9U3w5iEbkjImFPZCCFxt+EyYRRBtsSqVBL+6Hsw1cq9S0LzQztSpihUqdgL5cUh4XnpojcF9+QanMGSPAuVfteuSki0bk0cFRQc4FT26slDp/J7qaIGGWOa9YAz5Rp2GyJ7SKGqjTnJLfDa5DH6RJYU4FAdCmEgPO6I0QdkagnN+WWyK0E7RH6sAPbLIHNOaVZ1PqtEg9sFsHH03qk5XVzCTZTP2Nq69MWBA1xEXB4/Qld61VEYkm6Eot0khXdEUwFMXigwNjR7u0aDEmyt+vaBnhDZF1ikaSXVHW2bziDF2r0uFYGTns6RJa1EDGCtG2SVHYwuvnXcVBrAmVUNmH2csWLVNW04oqIDEViOehU2cJnNc7WLLUXCNwqWCvPLm5VUrNVds4feVVHSDoiQ5FB4lSOb/LpQzKoDrtp0XsvNqthCQgQxdWwRxSA9ec5sd7aBAi258wBrzYkFnlzeog2oyE3AF5dnrNouOzMdIfK9G1x4Ckac9MVQ23Dy/Ozmq9RksBNwzy24pIErtZIdfZdhDOZM+h/6tfsbCdzYS6qfp9c1Rko16AWS63m/GnTJYhr7a3fnwtrXIbh2bmw5CK8VIMhAs1oLsyuP4YI58OkTD/+6+m/VX9vUQ2Yqk3NnQ8zjdrU4howvya1AGc+zKjPt6SeTEueGeF4LvZ8V3Ncb28bqo5Mhz8oV5MpWPQ8IX9i3v2QA5ErUTOevuZRktA6/fZcV2MBrwR1pKAW5zMkZuhuzoedxvbcGm7QMFSZXk7BFjgDvDdP9A2BgMfiGvr2TWOhjlp6rM267VndGj4y45IGxoObV9MwT/fVVrHcmmwpFh9Fs7JXU2LbFbCW9OodYc2rBVsIasEaYT2+XawHO1cP5taDLVbBKopiwwU2t5y0FZb7hyYghjeGjdIGuXcEEJ6LJiS2N4YdnYkBSe8G7N98/uQSAP1z0RgW7v8NSM6FCniDbxWo7d/83Rh2QFvBkbfgAy9RnGm8wafHsG0swFBmQNYuy67+wAb2+P7BRjbHMsKTkPVUPkGwxtQcjADM1AF6EyJwMf0MJi6EYMFK3i4bh0NvUgpKIzCFEWSw9CfY4E5H3nhKpiv529nItpbDlFZJjAlq9ya9nlfIhA4LsHAygQsKx/z7GNaYjPHOTP5jlSUWrZlpZ77ox0r3HyvgkwXYgi4LbdIutwWZHn/iFGA7egNTZdQsVewjW2pSWJuaWzggbmkB5ZPfqtkG0x/3UXKVG9PIA+VGStE7gSVeocyOGI/IjJC4cISjk40/x1uFEdlF3iss+tbJ5r7Ilwsjsi/wM0A+mtb9jbR/cSAiIWlNjCEiErSbEpr8yzAcOF4o5gXLaYPoFEC73wYTlXbxlk80prHup8F8JRXqamkQf3Av+gHsAezDCXMI2Wc/7YGzQUzkj1xxcheWxdNvENGkSToH+iURKILkL3kwywLlJgE2dtbuvwDgjcDhtSLMsNNrJMA/AB+TkbJOAv7JESyOxr50h/eJEcUeF6Zgv2EBKyuxP0eAqVBcmGFImIWhTwFPcoThG4WyPDtpxPVCs+E1zihLxZxkNynMdHgCGJHOut5mC2i45nTheTW7NC3y5njQnXS0t/ofeMsHsA83LKgHO55T1+cJo/U/KrlC4eOhpKrzE7eilnTiVtyJunc/+L32uv5d2ZXdeHe4K927HzyqbRBFtGmP2sDqVC+0CBu5I3Vc3lybvN00UuORwaivp5Zm0Sn0FxVS6JvPZO5LP41t0PDYa9hzLvMkPelKN+nNNgxm/6uUSLcEViLTp+rpm1NWHz3wlv8V7N9n7djNdshu6wAAAABJRU5ErkJggg==";
+const RECEIPT_QR_B64 = "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";   /* QR ชำระเงิน PromptPay (ขาวดำ) พิมพ์ท้ายบิลเหมือน POS */
+function loadImg(b64){ if(!b64) return null; const i = new Image(); i.src = "data:image/png;base64," + b64; return i; }
+const logoImg = loadImg(RECEIPT_LOGO_B64), qrImg = loadImg(RECEIPT_QR_B64);
+/* ชื่อเมนูภาษาอังกฤษ: "มัทฉะลาเต้ (Matcha Latte)" → "Matcha Latte" (ถ้าไม่มีวงเล็บใช้ชื่อเดิม) */
+const engName = n => { const m = String(n || "").match(/\(([^()]*[A-Za-z][^()]*)\)\s*$/); return m ? m[1].trim() : String(n || ""); };
+const imgOk = i => !!(i && i.complete && i.naturalWidth);
+
+// วาดใบออเดอร์เป็นภาพ หน้าตาเหมือนบิล POS (รองรับภาษาไทยทุกรุ่นเครื่องพิมพ์ ไม่ต้องตั้ง code page)
+function ticketCanvas(o, width, scale){
   const FONT = '"Sarabun","Noto Sans Thai","Tahoma",sans-serif';
   const items = Array.isArray(o.items) ? o.items : [];
   const d = new Date(o.created_at || Date.now());
-  const L = []; // {t, b, sz, al}
-  const add = (t, b, sz, al)=> L.push({ t:String(t == null ? "" : t), b:!!b, sz:sz||24, al:al||"left" });
-  L.push({ t:"อย่าลืมกดส่งในระบบ", b:true, sz:34, al:"center", inv:true }); // แถบดำตัวหนังสือขาว ตัวใหญ่ เด่นที่หัวใบ
-  add(" ", false, 10);
-  add("LONG DO CAFE & BAKERY", true, 26, "center");
-  add("ออเดอร์ #" + o.order_no, true, 48, "center");
-  add(d.toLocaleDateString("th-TH",{day:"numeric",month:"short"}) + " " + d.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"}) + " น.", false, 22, "center");
-  add("--------------------------------", false, 22, "center");
-  add((o.order_type || "") + " · " + (o.time_text || ""), true, 28);
-  add("ลูกค้า: " + (o.customer_name || ""), false, 26);
-  if(o.address) add("ที่อยู่: " + o.address, false, 24);
-  if(o.note) add("หมายเหตุ/เบอร์: " + o.note, true, 26);
-  add("--------------------------------", false, 22, "center");
-  items.forEach(it=>{
-    add((it.qty || 1) + "x " + it.name, true, 30);
-    (it.opts || []).forEach(x=> add("   - " + x, false, 24));
-    if(it.note) add("   * " + it.note, true, 24);
-  });
-  add("--------------------------------", false, 22, "center");
-  add("รวม " + Number(o.total || 0).toLocaleString("th-TH") + " บาท", true, 30, "right");
-  add(" ", false, 20);
-
-  const m = document.createElement("canvas"); m.width = width;
-  let g = m.getContext("2d");
+  const baht = n => "฿" + Number(n || 0).toLocaleString("th-TH");
   const pad = 6, maxW = width - pad*2;
-  const wrapped = [];
-  L.forEach(l=>{
-    g.font = (l.b ? "bold " : "") + l.sz + "px " + FONT;
-    let cur = "";
-    for(const ch of Array.from(l.t)){
-      if(g.measureText(cur + ch).width > maxW && cur){
-        const sp = cur.lastIndexOf(" ");   // ตัดที่ช่องว่างล่าสุดถ้ามี จะได้ไม่ขาดกลางคำอังกฤษ
-        if(sp > 0 && ch !== " "){ wrapped.push({ ...l, t:cur.slice(0, sp) }); cur = cur.slice(sp + 1) + ch; }
-        else{ wrapped.push({ ...l, t:cur }); cur = ch === " " ? "" : ch; }
-      }
-      else cur += ch;
-    }
-    wrapped.push({ ...l, t:cur });
-  });
+  const meas = document.createElement("canvas").getContext("2d");
+  const font = (l)=> (l.b ? "bold " : "") + l.sz + "px " + FONT;
   const lh = l => Math.round(l.sz * 1.35);
-  const H = wrapped.reduce((t,l)=> t + lh(l), 0) + 18;
-  const c = document.createElement("canvas"); c.width = width; c.height = H;
-  g = c.getContext("2d");
+  const P = []; // รายการคำสั่งวาด
+  const text = (t, b, sz, al, extra)=> P.push(Object.assign({ k:"text", t:String(t == null ? "" : t), b:!!b, sz:sz||22, al:al||"left" }, extra||{}));
+  const row = (l, r, b, sz)=> P.push({ k:"row", l:String(l), r:String(r), b:!!b, sz:sz||22 });
+  const dash = ()=> P.push({ k:"dash" });
+  const gap = h => P.push({ k:"gap", h });
+  const wrap = (t, l, w)=>{
+    meas.font = font(l); const out = []; let cur = "";
+    for(const ch of Array.from(t)){
+      if(meas.measureText(cur + ch).width > w && cur){
+        const sp = cur.lastIndexOf(" ");
+        if(sp > 0 && ch !== " "){ out.push(cur.slice(0, sp)); cur = cur.slice(sp + 1) + ch; }
+        else{ out.push(cur); cur = ch === " " ? "" : ch; }
+      } else cur += ch;
+    }
+    out.push(cur); return out;
+  };
+
+  if(imgOk(logoImg)) P.push({ k:"img", img:logoImg, w:Math.min(150, width - 40) });
+  text(SHOP.name, false, 26, "center");
+  if(SHOP.address) text(SHOP.address, false, 20, "center");
+  if(SHOP.phone) text("โทร: " + SHOP.phone, false, 20, "center");
+  gap(4);
+  text("ออเดอร์ #" + o.order_no, false, 48, "center");
+  text("ลูกค้า: " + (o.customer_name || ""), false, 28, "center");
+  text(d.toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"numeric"}) + " " + d.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"}) + " น.", false, 22, "center");
+  dash();
+  text((o.order_type || "") + " · " + (o.time_text || ""), false, 26);
+  if(o.address) text("ที่อยู่: " + o.address, false, 24);
+  if(o.note) text("หมายเหตุ/เบอร์: " + o.note, false, 26);
+  dash();
+  items.forEach(it=>{
+    const qty = Number(it.qty) || 1, unit = Number(it.unitPrice) || 0;
+    row(engName(it.name) + " x" + qty, baht(unit * qty), true, 26)   /* ชื่อเมนูเป็นภาษาอังกฤษ + ตัวหนาเฉพาะชื่อเมนู */;
+    if(qty > 1 && unit) text("   · " + baht(unit) + "/ชิ้น", false, 20);
+    const opts = (it.opts || []).filter(Boolean);
+    if(opts.length) text("› " + opts.join(", "), false, 22, "left", { indent:12 });
+    if(it.note) text("* " + it.note, false, 22, "left", { indent:12 });
+  });
+  dash();
+  row("รวม", baht(o.total), false, 24);
+  row("ยอดรวม", baht(o.total), false, 34);
+  if(imgOk(qrImg)){ gap(6); text("สแกน QR ชำระเงิน", false, 20, "center"); P.push({ k:"img", img:qrImg, w:width - 24 }); }
+  dash();
+  if(SHOP.footer) text(SHOP.footer, false, 22, "center");
+  gap(16);
+
+  // วัดความสูง (ตัดบรรทัดตามความกว้าง)
+  const draw = [];
+  P.forEach(p=>{
+    if(p.k === "text"){
+      const w = maxW - (p.indent || 0);
+      wrap(p.t, p, w).forEach(t=> draw.push(Object.assign({}, p, { t, h:lh(p) })));
+    } else if(p.k === "row"){
+      const rw = (meas.font = font(p), meas.measureText(p.r).width);
+      const lines = wrap(p.l, p, maxW - rw - 10);
+      lines.forEach((t,i)=> draw.push({ k:"row", l:t, r:i === lines.length - 1 ? p.r : "", b:p.b, sz:p.sz, h:lh(p) }));
+    } else if(p.k === "img"){ const h = Math.round(p.img.naturalHeight * p.w / p.img.naturalWidth); draw.push({ k:"img", img:p.img, w:p.w, ih:h, h:h + 8 }); }
+    else if(p.k === "dash") draw.push({ k:"dash", h:14 });
+    else draw.push({ k:"gap", h:p.h });
+  });
+  const H = draw.reduce((t,p)=> t + p.h, 0) + 24;
+  const sc = scale || 1;
+  const c = document.createElement("canvas"); c.width = Math.round(width * sc); c.height = Math.round(H * sc);
+  const g = c.getContext("2d");
+  g.scale(sc, sc);
   g.fillStyle = "#fff"; g.fillRect(0, 0, width, H);
-  g.fillStyle = "#000"; g.textBaseline = "top";
+  g.fillStyle = "#000"; g.strokeStyle = "#000"; g.textBaseline = "top";
   let y = 12;
-  wrapped.forEach(l=>{
-    g.font = (l.b ? "bold " : "") + l.sz + "px " + FONT;
-    const w = g.measureText(l.t).width;
-    const x = l.al === "center" ? (width - w)/2 : l.al === "right" ? width - pad - w : pad;
-    if(l.inv){ g.fillStyle = "#000"; g.fillRect(0, y - 8, width, lh(l) + 12); g.fillStyle = "#fff"; }
-    g.fillText(l.t, x, y);
-    if(l.inv) g.fillStyle = "#000";
-    y += lh(l);
+  draw.forEach(p=>{
+    if(p.k === "text"){
+      g.font = font(p);
+      const w = g.measureText(p.t).width;
+      const x = p.al === "center" ? (width - w)/2 : p.al === "right" ? width - pad - w : pad + (p.indent || 0);
+      if(p.inv){ g.fillStyle = "#000"; g.fillRect(0, y - 8, width, p.h + 12); g.fillStyle = "#fff"; }
+      g.fillText(p.t, x, y);
+      if(p.inv) g.fillStyle = "#000";
+    } else if(p.k === "row"){
+      g.font = font(p); g.fillText(p.l, pad, y);
+      if(p.r) g.fillText(p.r, width - pad - g.measureText(p.r).width, y);
+    } else if(p.k === "img"){ g.drawImage(p.img, (width - p.w)/2, y + 4, p.w, p.ih); }
+    else if(p.k === "dash"){ g.lineWidth = 2; g.setLineDash([8, 6]); g.beginPath(); g.moveTo(pad, y + 6); g.lineTo(width - pad, y + 6); g.stroke(); g.setLineDash([]); }
+    y += p.h;
   });
   return c;
 }
@@ -695,6 +743,47 @@ function canvasToEscpos(c){
   out.push(0x1b, 0x64, 0x05, 0x1d, 0x56, 0x42, 0x00); // ฟีดกระดาษ + ตัด (ถ้ามีใบมีด)
   return Uint8Array.from(out);
 }
+/* ---------- บิลเป็นรูป PNG: ดูตัวอย่าง / แชร์ / ดาวน์โหลด ---------- */
+function billPngBlob(o){
+  return new Promise(res=> ticketCanvas(o, 384, 2).toBlob(res, "image/png"));
+}
+function blobToB64(blob){
+  return new Promise((res, rej)=>{ const r = new FileReader(); r.onload = ()=> res(String(r.result).split(",")[1]); r.onerror = rej; r.readAsDataURL(blob); });
+}
+async function openBillPng(o){
+  if(!o) return;
+  const blob = await billPngBlob(o);
+  const url = URL.createObjectURL(blob);
+  const fname = "bill-" + o.order_no + ".png";
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:12px";
+  ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;max-height:100%;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:10px 14px;font-weight:700;display:flex;justify-content:space-between;align-items:center">บิลออเดอร์ #${esc(o.order_no)}<button id="bpX" class="btn sec" style="padding:4px 10px">✕</button></div>
+    <div style="overflow:auto;background:#e5e7eb;padding:10px;text-align:center"><img src="${url}" style="width:min(100%,384px);background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.25)"></div>
+    <div style="display:flex;gap:8px;padding:10px 14px"><button id="bpShare" class="btn" style="flex:1">📤 แชร์</button><button id="bpDl" class="btn sec" style="flex:1">⬇ ดาวน์โหลด</button></div></div>`;
+  document.body.appendChild(ov);
+  const close = ()=>{ ov.remove(); URL.revokeObjectURL(url); };
+  ov.querySelector("#bpX").onclick = close;
+  ov.addEventListener("click", e=>{ if(e.target === ov) close(); });
+  ov.querySelector("#bpDl").onclick = async ()=>{
+    try{
+      if(window.nativeShareImage){ await window.nativeShareImage(await blobToB64(blob), fname, "บิลออเดอร์ #" + o.order_no); return; } /* ในแอป: เปิดหน้าต่างแชร์ มี "บันทึกลงไฟล์/Drive" */
+    }catch(e){}
+    const a = document.createElement("a"); a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
+    toast("ดาวน์โหลดบิลแล้ว");
+  };
+  ov.querySelector("#bpShare").onclick = async ()=>{
+    try{
+      if(window.nativeShareImage){ await window.nativeShareImage(await blobToB64(blob), fname, "บิลออเดอร์ #" + o.order_no); return; }
+    }catch(e){ if(e && /cancel|abort/i.test(String(e.message || e))) return; }
+    try{
+      const file = new File([blob], fname, { type:"image/png" });
+      if(navigator.canShare && navigator.canShare({ files:[file] })){ await navigator.share({ files:[file], title:"บิลออเดอร์ #" + o.order_no }); return; }
+    }catch(e){ if(e && e.name === "AbortError") return; }
+    toast("เครื่องนี้แชร์ตรงไม่ได้ — กด ⬇ ดาวน์โหลด แล้วส่งไฟล์แทน");
+  };
+}
+
 function ticketBytes(o, width){ return canvasToEscpos(ticketCanvas(o, width)); }
 function toB64(bytes){
   let s = "";

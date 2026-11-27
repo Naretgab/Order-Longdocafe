@@ -70,6 +70,13 @@
   try{ P("KeepAwake").keepAwake(); }catch(e){}
   document.addEventListener("visibilitychange", function(){ if(!document.hidden){ try{ P("KeepAwake").keepAwake(); }catch(e){} } });
 
+  /* ---------- แชร์/บันทึกรูปบิล (PNG) ผ่านหน้าต่างแชร์ของ Android ---------- */
+  window.nativeShareImage = async function(b64, filename, title){
+    const FS = P("Filesystem"), SH = P("Share");
+    const f = await FS.writeFile({ path:filename, data:b64, directory:"CACHE" });
+    await SH.share({ title:title || filename, files:[f.uri], dialogTitle:"แชร์บิล" });
+  };
+
   /* ---------- 2) Push (FCM) ---------- */
   var PN = P("PushNotifications");
   window.nativePush = {
