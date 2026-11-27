@@ -3,7 +3,7 @@
   "appName": "Long Do Bar",
   "webDir": "www",
   "server": {
-    "url": "https://naretgab.github.io/Order-Longdocafe-main/bar.html",
+    "url": "https://naretgab.github.io/Order-Longdocafe/bar.html",
     "cleartext": false,
     "allowNavigation": ["naretgab.github.io", "*.supabase.co", "cdn.jsdelivr.net", "access.line.me", "liff.line.me", "*.line.me"]
   },
