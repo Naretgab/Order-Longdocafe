@@ -1228,7 +1228,9 @@ function initWebMessaging(){
 async function registerWebPush(fromTap){
   const btn = $("pushBtn");
   try{
-    if(window.IS_NATIVE_APP) return;
+    if(btn) btn.textContent = "⏳ กำลังตรวจสอบ...";
+    if(window.IS_NATIVE_APP) throw new Error("หน้านี้กำลังเปิดใน Android APK ให้ใช้ระบบแจ้งเตือนของแอปแทน");
+    if(!window.firebase) throw new Error("โหลด Firebase ไม่สำเร็จ กรุณาปิดแล้วเปิด BAR ใหม่");
     if(!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)){
       throw new Error("อุปกรณ์หรือเบราว์เซอร์นี้ยังไม่รองรับ Web Push");
     }
@@ -1259,7 +1261,11 @@ async function registerWebPush(fromTap){
     else console.warn("Web Push registration:", e?.message || e);
   }
 }
-$("pushBtn").onclick = ()=> registerWebPush(true);
+$("pushBtn").onclick = async ()=>{
+  const btn = $("pushBtn");
+  btn.textContent = "⏳ กำลังเริ่ม...";
+  await registerWebPush(true);
+};
 
 /* ---------- PWA: service worker + กันจอดับ ---------- */
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
