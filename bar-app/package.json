@@ -1,0 +1,16 @@
+{
+  "name": "longdo-bar-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Long Do Bar — Android app (Capacitor) ห่อหน้า bar.html",
+  "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/push-notifications": "^8.0.0",
+    "@capacitor-community/bluetooth-le": "^8.0.0",
+    "@capacitor-community/keep-awake": "^8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.0.0"
+  }
+}

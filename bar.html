@@ -13,6 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="native-bridge.js?v=1"></script>
 <style>
 :root{--g:#00b14f;--gd:#008f40;--bg:#f2f3f5;--card:#fff;--tx:#1f2328;--mut:#7a828c;--red:#e5484d;--org:#f59e0b;--blue:#2563eb;--bd:#e5e7eb}
 *{box-sizing:border-box}
@@ -1129,6 +1130,7 @@ function showApp(){
   loadShop();
   sb.channel("shop-bar").on("postgres_changes",{event:"*",schema:"public",table:"shop_settings"}, loadShop).subscribe();
   keepAwake();
+  if(window.nativePush) window.nativePush.init(sb); /* แอป APK: ลงทะเบียนแจ้งเตือน FCM */
   startStation();
   autoLine();
   askWho();

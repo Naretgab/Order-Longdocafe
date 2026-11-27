@@ -1,0 +1,17 @@
+{
+  "appId": "th.longdocafe.bar",
+  "appName": "Long Do Bar",
+  "webDir": "www",
+  "server": {
+    "url": "https://naretgab.github.io/Order-Longdocafe-main/bar.html",
+    "cleartext": false,
+    "allowNavigation": ["naretgab.github.io", "*.supabase.co", "cdn.jsdelivr.net", "access.line.me", "liff.line.me", "*.line.me"]
+  },
+  "android": { "allowMixedContent": false },
+  "plugins": {
+    "PushNotifications": { "presentationOptions": ["badge", "sound", "alert"] },
+    "BluetoothLe": {
+      "displayStrings": { "scanning": "กำลังค้นหาเครื่องพิมพ์…", "cancel": "ยกเลิก", "availableDevices": "อุปกรณ์ที่พบ", "noDeviceFound": "ไม่พบเครื่องพิมพ์" }
+    }
+  }
+}
