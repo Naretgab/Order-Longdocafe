@@ -13,10 +13,10 @@
   /* ---------- 1) Bluetooth LE polyfill ---------- */
   var BLE = P("BluetoothLe"), bleInit = null;
   function ensureBle(){ return bleInit || (bleInit = BLE.initialize({ androidNeverForLocation:true })); }
-  function toHex(v){
+  function toBase64(v){
     var u = v instanceof Uint8Array ? v : new Uint8Array(v.buffer || v, v.byteOffset || 0, v.byteLength);
-    var s = ""; for(var i = 0; i < u.length; i++) s += (u[i] < 16 ? "0" : "") + u[i].toString(16);
-    return s;
+    var s = ""; for(var i = 0; i < u.length; i++) s += String.fromCharCode(u[i]);
+    return btoa(s);
   }
   function makeDevice(id, name){
     var listeners = [], dev = { id:id, name:name || "", gatt:null };
@@ -25,8 +25,10 @@
     gatt.connect = async function(){
       await ensureBle();
       await BLE.connect({ deviceId:id });
-      if(BLE.addListener){
-        try{ await BLE.addListener("disconnected|" + id, function(){ gatt.connected = false; listeners.forEach(function(f){ try{ f({ target:dev }); }catch(e){} }); }); }catch(e){}
+      if(BLE.addListener && !gatt._disconnectListener){
+        try{ gatt._disconnectListener = await BLE.addListener("onDisconnect", function(ev){
+          if(!ev || ev.deviceId === id){ gatt.connected = false; listeners.forEach(function(f){ try{ f({ target:dev }); }catch(e){} }); }
+        }); }catch(e){}
       }
       gatt.connected = true; return gatt;
     };
@@ -39,8 +41,8 @@
             var props = ch.properties || {};
             return {
               uuid:ch.uuid, properties:{ write:!!props.write, writeWithoutResponse:!!props.writeWithoutResponse },
-              writeValue: function(v){ return BLE.write({ deviceId:id, service:sv.uuid, characteristic:ch.uuid, value:toHex(v) }); },
-              writeValueWithoutResponse: function(v){ return BLE.writeWithoutResponse({ deviceId:id, service:sv.uuid, characteristic:ch.uuid, value:toHex(v) }); }
+              writeValue: function(v){ return BLE.write({ deviceId:id, service:sv.uuid, characteristic:ch.uuid, value:toBase64(v) }); },
+              writeValueWithoutResponse: function(v){ return BLE.writeWithoutResponse({ deviceId:id, service:sv.uuid, characteristic:ch.uuid, value:toBase64(v) }); }
             };
           });
         } };
@@ -79,29 +81,55 @@
 
   /* ---------- 2) Push (FCM) ---------- */
   var PN = P("PushNotifications");
+  var pushListenersReady = false;
   window.nativePush = {
-    /* เรียกหลังพนักงานล็อกอินแล้ว: ขออนุญาต → สร้างช่องเสียง → ลงทะเบียน → เก็บ token ใน staff_devices */
     init: async function(sb){
       try{
         var perm = await PN.checkPermissions();
         if(perm.receive !== "granted") perm = await PN.requestPermissions();
         if(perm.receive !== "granted"){ window.nativePush.status = "denied"; return "denied"; }
-        try{ await PN.createChannel({ id:"orders", name:"ออเดอร์ใหม่", description:"แจ้งเตือนเสียงดังเมื่อมีออเดอร์ใหม่",
-              importance:5, visibility:1, sound:"alert", vibration:true, lights:true }); }catch(e){}
-        await PN.addListener("registration", async function(t){
-          window.nativePush.token = t.value;
-          try{
-            var u = await sb.auth.getUser();
-            var uid = u && u.data && u.data.user && u.data.user.id;
-            if(uid) await sb.from("staff_devices").upsert({ token:t.value, user_id:uid, platform:"android", updated_at:new Date().toISOString() }, { onConflict:"token" });
-            window.nativePush.status = "ok";
-          }catch(e){ window.nativePush.status = "save-error"; }
-        });
-        await PN.addListener("registrationError", function(e){ window.nativePush.status = "error: " + (e && e.error || ""); });
+        try{ await PN.createChannel({ id:"orders", name:"ออเดอร์ใหม่", description:"แจ้งเตือนออเดอร์ใหม่",
+          importance:5, visibility:1, sound:"alert", vibration:true, lights:true }); }catch(e){}
+        if(!pushListenersReady){
+          pushListenersReady = true;
+          await PN.addListener("registration", async function(t){
+            window.nativePush.token = t.value;
+            try{
+              var u = await sb.auth.getUser();
+              var uid = u && u.data && u.data.user && u.data.user.id;
+              if(!uid) throw new Error("ไม่พบผู้ใช้ที่เข้าสู่ระบบ");
+              var saved = await sb.from("staff_devices").upsert({
+                token:t.value, user_id:uid, platform:"android", updated_at:new Date().toISOString()
+              }, { onConflict:"token" });
+              if(saved.error) throw saved.error;
+              window.nativePush.status = "ok";
+              if(window.nativePush._resolve){ window.nativePush._resolve("ok"); window.nativePush._resolve = null; }
+            }catch(e){
+              window.nativePush.status = "save-error: " + (e && e.message || e);
+              if(window.nativePush._resolve){ window.nativePush._resolve(window.nativePush.status); window.nativePush._resolve = null; }
+            }
+          });
+          await PN.addListener("registrationError", function(e){
+            window.nativePush.status = "error: " + (e && (e.message || e.error) || "ลงทะเบียน FCM ไม่สำเร็จ");
+            if(window.nativePush._resolve){ window.nativePush._resolve(window.nativePush.status); window.nativePush._resolve = null; }
+          });
+        }
+        window.nativePush.status = "registering";
         await PN.register();
-        return "registering";
-      }catch(e){ window.nativePush.status = "error: " + (e && e.message || e); return window.nativePush.status; }
+        return await new Promise(function(resolve){
+          window.nativePush._resolve = resolve;
+          setTimeout(function(){
+            if(window.nativePush._resolve){
+              window.nativePush._resolve(window.nativePush.status || "ยังไม่ได้รับ FCM token");
+              window.nativePush._resolve = null;
+            }
+          }, 12000);
+        });
+      }catch(e){
+        window.nativePush.status = "error: " + (e && e.message || e);
+        return window.nativePush.status;
+      }
     },
-    status:"", token:""
+    status:"", token:"", _resolve:null
   };
 })();
