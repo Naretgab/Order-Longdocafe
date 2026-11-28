@@ -15,6 +15,16 @@ jobs:
         with: { distribution: temurin, java-version: 21 }
       - name: Install
         run: npm install --no-audit --no-fund
+      - name: Bundle BAR locally for native plugins
+        run: |
+          mkdir -p www
+          cp ../bar.html www/index.html
+          cp ../bar.html www/bar.html
+          cp ../native-bridge.js www/native-bridge.js
+          cp ../sw.js www/sw.js
+          cp ../bar.webmanifest www/bar.webmanifest
+          cp ../icon-192.png www/icon-192.png
+          cp ../icon-512.png www/icon-512.png
       - name: Create Android project
         run: npx cap add android
       - name: Firebase config (google-services.json from secret)
