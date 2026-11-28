@@ -99,7 +99,7 @@
               var uid = u && u.data && u.data.user && u.data.user.id;
               if(!uid) throw new Error("ไม่พบผู้ใช้ที่เข้าสู่ระบบ");
               var saved = await sb.from("staff_devices").upsert({
-                token:t.value, user_id:uid, platform:"android", updated_at:new Date().toISOString()
+                token:t.value, user_id:uid, platform:"android", device_label:"Android APK", updated_at:new Date().toISOString(), last_seen_at:new Date().toISOString(), is_active:true, last_error:null
               }, { onConflict:"token" });
               if(saved.error) throw saved.error;
               window.nativePush.status = "ok";
