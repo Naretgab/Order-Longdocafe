@@ -2,7 +2,7 @@ name: Build Bar APK
 on:
   workflow_dispatch: {}
   push:
-    paths: ["bar-app/**", ".github/workflows/build-bar-apk.yml"]
+    paths: ["bar-app/**", "bar.html", "native-bridge.js", ".github/workflows/build-bar-apk.yml"]
 jobs:
   build:
     runs-on: ubuntu-latest
