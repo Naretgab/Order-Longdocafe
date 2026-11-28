@@ -115,8 +115,7 @@
           });
         }
         window.nativePush.status = "registering";
-        await PN.register();
-        return await new Promise(function(resolve){
+        var waiting = new Promise(function(resolve){
           window.nativePush._resolve = resolve;
           setTimeout(function(){
             if(window.nativePush._resolve){
@@ -125,6 +124,8 @@
             }
           }, 12000);
         });
+        await PN.register();
+        return await waiting;
       }catch(e){
         window.nativePush.status = "error: " + (e && e.message || e);
         return window.nativePush.status;
