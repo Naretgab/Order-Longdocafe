@@ -1015,9 +1015,10 @@ function ago(iso){
 }
 let teamTimer = null;
 async function renderTeam(){
-  const [st, od] = await Promise.all([
+  const [st, od, dv] = await Promise.all([
     sb.from("staff_line").select("user_id,display_name,created_at,last_seen_at").order("created_at"),
-    sb.from("orders").select("order_no,created_at,customer_name,order_type,line_user_id,status").order("created_at",{ascending:false}).limit(8)
+    sb.from("orders").select("order_no,created_at,customer_name,order_type,line_user_id,status").order("created_at",{ascending:false}).limit(8),
+    sb.from("staff_device_status").select("user_id,platform,device_label,is_active,updated_at,last_seen_at,last_error").order("updated_at",{ascending:false})
   ]);
   if(st.error || od.error){
     const msg = (st.error||od.error).message;
@@ -1028,7 +1029,18 @@ async function renderTeam(){
   if(myStaffId() && !staff.some(x=> x.user_id === myStaffId())) setMyStaffId(""); // ชื่อถูกลบออกจากรายชื่อแล้ว
   const me = myStaffId();
   const activeN = staff.filter(x=> x.last_seen_at && Date.now()-new Date(x.last_seen_at).getTime() < ACTIVE_MS).length;
-  let html = `<div class="me">เครื่องนี้ใช้โดย (เลือกชื่อ LINE ของคุณ เพื่อให้ระบบรู้ว่าคุณกำลังเปิดแอปอยู่)
+  const devices = dv.data || [];
+  const deviceActive = devices.filter(x=>x.is_active).length;
+  const deviceRows = devices.length ? devices.map(x=>{
+    const platform = x.platform === "ios-web" ? "iPhone / iPad" : x.platform === "android" ? "Android APK" : x.platform;
+    const state = x.is_active ? "Active · ลงทะเบียนรับแจ้งเตือน" : "Inactive · ปิดใช้งาน";
+    const when = x.updated_at ? new Date(x.updated_at).toLocaleString("th-TH",{dateStyle:"short",timeStyle:"short"}) : "-";
+    return `<div class="pr ${x.is_active?"on":""}"><span class="st"></span><div class="nm">${esc(x.device_label||platform)}<div class="sub">${esc(platform)} · ${state}<br>อัปเดตล่าสุด: ${esc(when)}${x.last_error ? "<br>สาเหตุ: "+esc(x.last_error) : ""}</div></div></div>`;
+  }).join("") : '<div class="empty" style="padding:16px 0">ยังไม่มีอุปกรณ์ลงทะเบียนรับแจ้งเตือน</div>';
+  let html = `<h3>อุปกรณ์ที่รับการแจ้งเตือน — Active ${deviceActive} / ${devices.length} เครื่อง</h3>${deviceRows}`;
+  if(dv.error) html = '<div class="warn">โหลดสถานะอุปกรณ์ไม่สำเร็จ: '+esc(dv.error.message)+'</div>';
+  html += `<div style="font-size:12px;color:var(--mut);margin:0 0 12px">Active หมายถึงมี Token ลงทะเบียนอยู่และยังไม่ถูกระบุว่าใช้ไม่ได้ ไม่ได้ยืนยันว่าเครื่องออนไลน์หรือได้รับแจ้งเตือนสำเร็จทุกครั้ง</div>`;
+  html += `<div class="me">เครื่องนี้ใช้โดย (เลือกชื่อ LINE ของคุณ เพื่อให้ระบบรู้ว่าคุณกำลังเปิดแอปอยู่)
     <select id="meSel"><option value="">— ไม่ระบุ —</option>${staff.map(x=>`<option value="${esc(x.user_id)}" ${x.user_id===me?"selected":""}>${esc(x.display_name||"(ไม่มีชื่อ)")}</option>`).join("")}</select></div>`;
   html += `<h3>ทีมงานที่รับแจ้งเตือน LINE — กำลัง active ${activeN} / ${staff.length} คน</h3>`;
   html += staff.length ? staff.map(x=>{
@@ -1251,7 +1263,7 @@ async function registerWebPush(fromTap){
     if(userError || !userData?.user?.id) throw new Error("กรุณาเข้าสู่ระบบใหม่");
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const { error } = await sb.from("staff_devices").upsert({
-      token, user_id:userData.user.id, platform:isIOS ? "ios-web" : "web", updated_at:new Date().toISOString()
+      token, user_id:userData.user.id, platform:isIOS ? "ios-web" : "web", device_label:isIOS ? "iPhone / iPad (PWA)" : (/Android/i.test(navigator.userAgent) ? "Android (Web)" : "Web Browser"), updated_at:new Date().toISOString(), last_seen_at:new Date().toISOString(), is_active:true, last_error:null
     }, { onConflict:"token" });
     if(error) throw error;
     btn.textContent = "✓ เปิดแจ้งเตือนแล้ว";
